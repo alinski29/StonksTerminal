@@ -3,6 +3,7 @@ module StonksTerminal
 using Comonicon
 using Stonks
 
+include("utils.jl")
 include("types.jl")
 
 include("config.jl")

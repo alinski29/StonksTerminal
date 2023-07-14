@@ -1,6 +1,5 @@
 using Test
 
 @testset "StonksTerminal" begin
-  @info("Nothing here yet")
-  # include()
+  include("test_config.jl")
 end

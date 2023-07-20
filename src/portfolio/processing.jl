@@ -5,7 +5,7 @@ using Stonks: load
 
 using StonksTerminal.Store
 using StonksTerminal: Config, config_read
-using StonksTerminal: TransferType, TradeType, Trade, PortfolioInfo, StockRepository, StockRecord, AssetProfile, FinancialAsset
+using StonksTerminal: TransferType, TradeType, Trade, PortfolioInfo, PortfolioProfile, PortfolioMember, StockRepository, StockRecord, AssetProfile, FinancialAsset
 using StonksTerminal: arrow
 using StonksTerminal: TradeType, Buy, Sell
 
@@ -69,7 +69,7 @@ function compute_derived_fields(trades::Vector{Trade}, dates::Vector{Date})::Nam
 
 end
 
-load_stores() = Store.load_stores(cfg.data.dir, arrow)
+load_stores() = Store.load_stores(config_read(), arrow)
 
 function load_repository(cfg::Config, port::PortfolioInfo)::StockRepository
 

@@ -1,29 +1,30 @@
 module Watchlist
 
 using Comonicon
-using StonksTerminal: config_read
+using StonksTerminal: config_read, config_write, parse_list
 
-@cast add(item::String) = watchlist(; add=item) 
-@cast remove(item::String) = watchlist(; remove=item) 
-
-function watchlist(; add::String="", remove::String="")
+@cast function items(items::String)
   cfg = config_read()
-
-  if length(add) > 0
-    toAdd = parse_list(add)
-    @info("Adding $(size(toAdd)) tickers to watchlist")
-    cfg.watchlist = unique(union(cfg.watchlist, toAdd))
+  symbols = parse_list(items)
+  
+  if length(symbols) > 0
+    @info("Adding $(size(symbols)) tickers to watchlist")
+    cfg.watchlist = unique(union(cfg.watchlist, symbols))
   end
 
-  if length(remove) > 0
-    toRm = parse_list(remove)
-    @info("Removing $(size(toRm)) tickers from watchlist")
-    cfg.watchlist = [item for item in cfg.watchlist if !in(item, toRm)]
+  config_write(cfg)
+end
+
+@cast function remove(items::String)
+  cfg = config_read()
+  symbols = parse_list(items)
+
+  if length(symbols) > 0
+    @info("Removing $(size(symbols)) tickers from watchlist")
+    cfg.watchlist = [item for item in cfg.watchlist if !in(item, symbols)]
   end
 
-  if length(add) > 0 || length(remove) > 0
-    config_write(cfg)
-  end
+  config_write(cfg)
 end
 
 end

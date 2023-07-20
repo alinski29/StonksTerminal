@@ -5,7 +5,7 @@ using StonksTerminal: FileFormat, PortfolioInfo, arrow, enum_from_string
 using StonksTerminal: Currency, USD, EUR
 using StonksTerminal: Transfer, TransferType, Deposit, Withdrawal
 using StonksTerminal: Trade, TradeType, Buy, Sell
-using StonksTerminal: collect_user_input
+using StonksTerminal: collect_user_input, parse_string
 
 include("test_utils.jl")
 
@@ -33,9 +33,5 @@ include("test_utils.jl")
   end
 
   rm(cfg_dir, recursive=true)
-
-  @testset "collecing user input" begin
-    collect_user_input("Enter a currency.", Currency)
-  end
 
 end

@@ -1,8 +1,9 @@
 
 using Comonicon
 using Stonks
-using StonksTerminal: Config, config_read
-using StonksTerminal: TransferType, TradeType, Transfer, Trade, FinancialAsset, PortfolioInfo
+using StonksTerminal: Config, config_read, config_write
+using StonksTerminal: TransferType, TradeType, Transfer, Trade, FinancialAsset, PortfolioInfo, Currency
+using StonksTerminal: collect_user_input, parse_string, print_enum_values, enum_from_string
 
 function add_trade(type::TradeType, name::Union{String,Nothing}=nothing)
   cfg = config_read()
@@ -10,25 +11,30 @@ function add_trade(type::TradeType, name::Union{String,Nothing}=nothing)
 
   @info("Enter date in format 'yyyy-mm-dd': ")
   date = Date(parse_string(readline()))
+  # date = collect_user_input("Enter date in format 'yyyy-mm-dd': ", Date)
 
-  @info("Symbol (ticker): ")
-  symbol = parse_string(readline())
+  symbol = collect_user_input("Symbol (ticker): ", String)
 
-  @info("Number of shares: ")
-  shares = tryparse(Int64, parse_string(readline()))
+  # @info("Number of shares: ")
+  # shares = tryparse(Int64, parse_string(readline()))
+  shares = collect_user_input("Number of shares: ", Int64)
 
   @info("Share price: ")
   share_price = tryparse(Float64, parse_string(readline()))
+  # share_price = collect_user_input("Share price: ", Float64)
 
   @info("Commission: ")
   commission = tryparse(Float64, parse_string(readline()))
+  # commission = collect_user_input("Commission: ", Float64)
 
-  @info("Currency: Choose between: $(print_enum_values(Currency))")
-  currency = enum_from_string(parse_string(readline()), Currency)
+  # @info("Currency: Choose between: $(print_enum_values(Currency))")
+  # currency = enum_from_string(parse_string(readline()), Currency)
+  currency = collect_user_input("Currency: ", Currency)
 
   exchange_rate = (
     if currency != port.currency
       @info("Exchange rate to $(port.currency): ")
+      # collect_user_input("Exchange rate: ", Float64)
       tryparse(Float64, parse_string(readline()))
     else
       nothing

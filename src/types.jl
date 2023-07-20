@@ -97,8 +97,7 @@ end
   name::String
   dates::Vector{Date}
   market_value::Vector{Float64}
-  # trades::Vector{Trade} - to decide if should be kept here or in members or method
-  cost::Vector{Float64} # - same as buys from {AssetProfile}
+  cost::Vector{Float64}
   realized_profit::Vector{Float64}
   unrealized_profit::Vector{Float64}
   weights::Dict{Date,Vector{Tuple{String,Float64}}}

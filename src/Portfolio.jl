@@ -1,4 +1,5 @@
 module Portfolio
+using StonksTerminal: Deposit, Withdrawal
 
 include("portfolio/cli_actions.jl")
 include("portfolio/processing.jl")

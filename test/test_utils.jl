@@ -1,9 +1,8 @@
 using Dates
-using StonksTerminal: Config, StoreConfig, config_write, config_read
-using StonksTerminal: FileFormat, arrow, PortfolioInfo, enum_from_string
-using StonksTerminal: Currency, USD, EUR
-using StonksTerminal: Transfer, TransferType, Deposit, Withdrawal
-using StonksTerminal: Trade, TradeType, Buy, Sell
+
+using StonksTerminal.Types
+using StonksTerminal: Config, StoreConfig
+using StonksTerminal: enum_from_string
 
 function load_testconfig()
   transfers = [

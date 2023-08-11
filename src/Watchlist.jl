@@ -1,7 +1,7 @@
 module Watchlist
 
 using Comonicon
-using StonksTerminal: config_read, config_write, parse_list
+using StonksTerminal: parse_list, config_read, config_write
 
 @cast function items(items::String)
   cfg = config_read()
@@ -28,5 +28,3 @@ end
 end
 
 end
-
-

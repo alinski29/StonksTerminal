@@ -1,16 +1,12 @@
 using Dates
 using Test
-using StonksTerminal: Config, StoreConfig, config_write, config_read
-using StonksTerminal: FileFormat, PortfolioInfo, arrow, enum_from_string
-using StonksTerminal: Currency, USD, EUR
-using StonksTerminal: Transfer, TransferType, Deposit, Withdrawal
-using StonksTerminal: Trade, TradeType, Buy, Sell
-using StonksTerminal: collect_user_input, parse_string
+
+using StonksTerminal.Types
+using StonksTerminal: Config, config_read, config_write
 
 include("test_utils.jl")
 
 @testset "Configuration" begin
-
   cfg_dir = "/tmp/StonksTerminal"
   cfg_path = "$cfg_dir/config.json"
   cfg_test = load_testconfig()
@@ -29,9 +25,7 @@ include("test_utils.jl")
     @test isa(cfg, Config)
     @test cfg.watchlist == cfg_test.watchlist
     @test cfg.currencies == cfg_test.currencies
-
   end
 
-  rm(cfg_dir, recursive=true)
-
+  rm(cfg_dir; recursive=true)
 end

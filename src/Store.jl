@@ -8,7 +8,8 @@ using Tables
 
 using Stonks.APIClients
 using Stonks.Stores: init, apply_schema
-using StonksTerminal: Config, config_read, FileFormat, csv, arrow
+using StonksTerminal: Config, config_read
+using StonksTerminal.Types
 
 @cast function update(; financials::Bool=false, info::Bool=false)
   config = config_read()

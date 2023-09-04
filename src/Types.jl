@@ -101,7 +101,7 @@ end
   sell::Float64 # cummulative
 end
 
-StockRepository = Dict{Date, Dict{String, StockRecord}}
+StockRepository = Dict{Date, Dict{String, AssetPrice}}
 
 # store data for a single asset - to be used for plotting
 @kwdef mutable struct AssetProfile <: AbstractStonksRecord
@@ -129,18 +129,6 @@ end
 @kwdef struct PortfolioMember
   info::Union{AssetInfo, Missing}
   trades::Vector{Trade}
-end
-
-# similar to AssetProfile, but used for a Portfolio
-@kwdef mutable struct PortfolioProfile
-  name::String
-  dates::Vector{Date}
-  market_value::Vector{Float64}
-  cost::Vector{Float64}
-  realized_profit::Vector{Float64}
-  unrealized_profit::Vector{Float64}
-  weights::Dict{Date, Vector{Tuple{String, Float64}}}
-  members::Dict{String, PortfolioMember}
 end
 
 @kwdef mutable struct PortfolioDataset

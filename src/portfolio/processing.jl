@@ -3,10 +3,9 @@ using UnicodePlots
 using Stonks
 using Stonks: load
 
-using Stonks: AssetPrice
+using Stonks: AssetPrice, AssetInfo
 using StonksTerminal.Store
-using StonksTerminal.Types
-using StonksTerminal.Types: StockRepository, PortfolioDataset, PortfolioMemberDataset
+using StonksTerminal.Types: StockRepository, PortfolioDataset, PortfolioMemberDataset, StockRepository
 using StonksTerminal: Config, config_read, config_write
 
 get_market_value(p::AssetProfile)::Vector{Float64} = p.shares .* p.closes
@@ -71,17 +70,14 @@ end
 cfg = config_read()
 stores = Store.load_stores(cfg.data.dir, arrow)
 
-using Stonks: AssetPrice, AssetInfo
-StockRepository2 = Dict{Date, Dict{String, AssetPrice}}
-
-function load_repository_v2(cfg::Config)::StockRepository2
+function load_repository(cfg::Config)::StockRepository
   trades = vcat([p.trades for (_, p) in cfg.portfolios]...)
   symbols = union(cfg.watchlist, Set(map(x -> x.symbol, trades)))
   prices::Dict{String, Vector{AssetPrice}} = 
     Stonks.load(stores[:price], Dict("symbol" => collect(symbols))) |>
     xs -> Dict([keys.symbol => collect(vs) for (keys, vs) in Stonks.groupby(xs, [:symbol])])
 
-  records_by_date::StockRepository2 = Dict()
+  records_by_date::StockRepository = Dict()
   for symbol in symbols
     smb_prices = get(prices, symbol, nothing)
     if isnothing(smb_prices)
@@ -101,7 +97,7 @@ function load_repository_v2(cfg::Config)::StockRepository2
 end
 
 function get_record_for_closest_date(
-  repo::StockRepository2,
+  repo::StockRepository,
   date::Date,
   symbol::String,
   retries::Int=10,
@@ -159,7 +155,7 @@ function trades_at_date(trades::Vector{Trade}, date::Date)::Dict{String, Int}
 end
 
 function get_assets_at_date(
-  repo::StockRepository2,
+  repo::StockRepository,
   date::Date,
   trades::Vector{Trade},
 )::Dict{String, AssetPrice}
@@ -351,8 +347,7 @@ function get_forex(target_currency::String)::Dict{Tuple{Date, String}, Float64}
     fx -> Dict(map(x -> ((x.date, x.base), x.rate), fx))
 end
 
-function get_portfolio_dataset(repo::StockRepository2, port::PortfolioInfo)::PortfolioDataset
-
+function get_portfolio_dataset(repo::StockRepository, port::PortfolioInfo)::PortfolioDataset
   dates = Date[]
   costs::Vector{Union{Float64, Missing}} = Float64[]
   sells::Vector{Union{Float64, Missing}} = Float64[]
@@ -427,8 +422,7 @@ function get_portfolio_dataset(repo::StockRepository2, port::PortfolioInfo)::Por
   )
 end
 
-function get_portfolio_member_dataset(repo::StockRepository2, port::PortfolioInfo, symbol::String)::PortfolioMemberDataset
-
+function get_portfolio_member_dataset(repo::StockRepository, port::PortfolioInfo, symbol::String)::PortfolioMemberDataset
   dates = Date[]
   closes::Vector{Union{Float64, Missing}} = Float64[]
   shares::Vector{Union{Float64, Missing}} = Int64[]
@@ -506,52 +500,6 @@ function get_portfolio_member_dataset(repo::StockRepository2, port::PortfolioInf
     info=info
   )
 
-end
-
-
-function to_porfolio_profile(repo::StockRepository, port::PortfolioInfo)::PortfolioProfile
-  info = Stonks.load(stores[:info])
-  dates = Date[]
-  costs = Float64[]
-  market_value = Float64[]
-  sells = Float64[]
-  shares = Int64[]
-  weights::Dict{Date, Vector{Tuple{String, Float64}}} = Dict()
-
-  repo_dates = sort([d for (d, _) in repo])
-  for date in repo_dates
-    assets = get_assets_at_date(repo, date, port.trades)
-    market_value_at_date = sum([get_market_value(rec) for (_, rec) in assets])
-    push!(dates, date)
-    push!(costs, sum([abs(rec.buy) for (_, rec) in assets]))
-    push!(sells, sum([abs(rec.sell) for (_, rec) in assets]))
-    push!(shares, sum([abs(rec.shares) for (_, rec) in assets]))
-    push!(market_value, market_value_at_date)
-    weights[date] = [
-      (smb, (market_value_at_date > 0 ? (rec.close * rec.shares) / market_value_at_date : 0)) for
-      (smb, rec) in assets
-    ]
-  end
-
-  realized_profit = get_realized_profit(dates, port.trades, costs, sells, shares)
-  unrealized_profit = market_value .- realized_profit
-  members = Dict([
-    smb => PortfolioMember(;
-      info=get_info_by_name(info, smb),
-      trades=filter(t -> t.symbol == smb, port.trades) |> xs -> sort(xs; by=x -> x.date),
-    ) for (smb, _) in get_assets_at_date(repo, last(repo_dates), port.trades)
-  ])
-
-  return PortfolioProfile(;
-    name=port.name,
-    dates=dates,
-    market_value=market_value,
-    cost=costs,
-    realized_profit=realized_profit,
-    unrealized_profit=unrealized_profit,
-    weights=weights,
-    members=members,
-  )
 end
 
 # TODO: Check if we need this

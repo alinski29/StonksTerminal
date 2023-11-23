@@ -42,7 +42,7 @@ function load_stores(path::String, format::FileFormat)
     :forex => FileStore{ExchangeRate}(;
       path="$path/forex",
       ids=[:base, :target],
-      partitions=[:target],
+      # partitions=[:target],
       format="arrow",
       time_column="date",
       reader=reader,

@@ -1,518 +1,284 @@
 using Dates
-using UnicodePlots
+using NamedArrays
 using Stonks
-using Stonks: load
+using Stonks: load, AssetPrice, AssetInfo
+using UnicodePlots
 
-using Stonks: AssetPrice, AssetInfo
 using StonksTerminal.Store
-using StonksTerminal.Types: StockRepository, PortfolioDataset, PortfolioMemberDataset, StockRepository
+using StonksTerminal.Types
 using StonksTerminal: Config, config_read, config_write
+using StonksTerminal: allocate_matrix, expand_matrix, ffill, fill_missing
+using StonksTerminal: map_dates_to_indices, get_record_for_closest_date
 
-get_market_value(p::AssetProfile)::Vector{Float64} = p.shares .* p.closes
+function get_return(p::PortfolioDataset; from::Union{Date, Nothing}=nothing, to::Union{Date, Nothing}=nothing)
+	slice = map_dates_to_indices(p.close, from, to)
+	row_names, col_names = names(p.close[slice, :])
+	daily_returns = allocate_matrix(Float64, row_names, col_names)
+	n, _ = size(daily_returns)
+	daily_returns[1, :] .= 1.0
+	daily_returns[2:n, :] =
+		p.close[(first(slice) + 1):last(slice), :] ./ p.close[first(slice):(last(slice) - 1), :] |>
+		mat -> map(x -> isnan(x) || isinf(x) ? 1.0 : x, mat)
 
-get_market_value(r::StockRecord)::Float32 = r.shares * r.close
+	return cumprod(daily_returns; dims=1) .- 1
+end
 
-get_avg_price(p::AssetProfile)::Vector{Float64} =
-  (map(abs, p.buys) .- map(abs, p.sells)) ./ p.shares
-
-get_avg_price(r::StockRecord)::Float64 = (abs(r.buy) - abs(r.sell)) / r.shares
-
-get_realized_profit(p::AssetProfile)::Vector{Float64} =
-  get_realized_profit(p.dates, p.trades, p.buys, p.sells, p.shares)
-
-get_info_by_name(info::Vector{AssetInfo}, name::String)::Union{AssetInfo, Missing} =
-  findfirst(x -> x.symbol == name, info) |> i -> isnothing(i) ? missing : info[i]
+function get_market_value(
+	p::PortfolioDataset;
+	from::Union{Date, Nothing}=nothing,
+	to::Union{Date, Nothing}=nothing,
+)::NamedMatrix{Float64}
+	slice = map_dates_to_indices(p.close, from, to)
+	net_shares = cumsum(p.shares_bought .- p.shares_sold; dims=1)[slice, :]
+	return p.close[slice, :] .* net_shares
+end
 
 function get_realized_profit(
-  dates::Vector{Date},
-  trades::Vector{Trade},
-  buys::Vector{Float64},
-  sells::Vector{Float64},
-  shares::Vector{Int64},
-)::Vector{Float64}
-  sell_trades = Dict([
-    t.date => (shares=abs(t.shares), share_price=abs(t.proceeds) / abs(t.shares)) for
-    t in trades if t.type === Sell
-  ])
-  avg_price = (map(abs, buys) .- map(abs, sells)) ./ shares
-
-  return [
-    get(sell_trades, dates[i], missing) |>
-    x -> !ismissing(x) ? x.shares * (x.share_price - avg_price[max(i - 1, 1)]) : 0.00 for
-    (i, _) in enumerate(avg_price)
-  ] |> cumsum
+	p::PortfolioDataset;
+	from::Union{Date, Nothing}=nothing,
+	to::Union{Date, Nothing}=nothing,
+)::NamedMatrix{Float64}
+	slice = map_dates_to_indices(p.close, from, to)
+	has_sale = map(x -> Int8(x > 0), p.shares_sold[slice, :])
+	price_diff = p.shares_sold_price[slice, :] .- (p.avg_price[slice, :] .* has_sale)
+	net_profit = p.shares_sold[slice, :] .* price_diff
+	return cumsum(net_profit; dims=1)
 end
 
-function compute_derived_fields(trades::Vector{Trade}, dates::Vector{Date})::NamedTuple
-  trades_by_date = Dict([
-    (
-      keys.date,
-      (
-        shares=sum(map(x -> x.shares, vs)),
-        sells=filter(x -> x.type === Sell, collect(vs)) |>
-              xs -> sum(map(x -> x.proceeds - abs(x.commission), xs)),
-        buys=filter(x -> x.type === Buy, collect(vs)) |>
-             xs -> sum(map(x -> x.proceeds - -(abs(x.commission)), xs)),
-      ),
-    ) for (keys, vs) in Stonks.groupby(trades, [:date])
-  ])
-
-  get_daily_trade(dt::Date, extractor::Function, default::T) where {T <: Any} =
-    get(trades_by_date, dt, missing) |> x -> !ismissing(x) ? extractor(x) : default
-
-  return (
-    shares=cumsum(map(dt -> get_daily_trade(dt, x -> x.shares, 0), dates)),
-    sells=cumsum(map(dt -> get_daily_trade(dt, x -> x.sells, 0.0), dates)),
-    buys=cumsum(map(dt -> get_daily_trade(dt, x -> x.buys, 0.0), dates)),
-  )
+function get_capital_gains(
+	p::PortfolioDataset;
+	from::Union{Date, Nothing}=nothing,
+	to::Union{Date, Nothing}=nothing,
+)::NamedMatrix{Float64}
+	slice = map_dates_to_indices(p.close, from, to)
+	println(slice)
+	net_shares = cumsum(p.shares_bought .- p.shares_sold; dims=1)[slice, :]
+	# TODO - This needs to be computed from returns
+	return net_shares .* (p.close[slice, :] .- p.avg_price[slice, :])
 end
 
-cfg = config_read()
-stores = Store.load_stores(cfg.data.dir, arrow)
+function get_weights(
+	p::PortfolioDataset;
+	from::Union{Date, Nothing}=nothing,
+	to::Union{Date, Nothing}=nothing,
+)::NamedMatrix{Float64}
+	market_value = get_market_value(p; from=from, to=to)
+	port_daily_value = sum(market_value; dims=2)
+	return market_value ./ port_daily_value |> mat -> map(x -> isnan(x) || isinf(x) ? 0.0 : x, mat)
+end
 
 function load_repository(cfg::Config)::StockRepository
-  trades = vcat([p.trades for (_, p) in cfg.portfolios]...)
-  symbols = union(cfg.watchlist, Set(map(x -> x.symbol, trades)))
-  prices::Dict{String, Vector{AssetPrice}} = 
-    Stonks.load(stores[:price], Dict("symbol" => collect(symbols))) |>
-    xs -> Dict([keys.symbol => collect(vs) for (keys, vs) in Stonks.groupby(xs, [:symbol])])
+	trades = vcat([p.trades for (_, p) in cfg.portfolios]...)
+	symbols = union(cfg.watchlist, Set(map(x -> x.symbol, trades)))
+	stores = Store.load_stores(config_read().data.dir, arrow)
+	prices::Dict{String, Vector{AssetPrice}} =
+		Stonks.load(stores[:price], Dict("symbol" => collect(symbols))) |>
+		xs -> Dict([keys.symbol => collect(vs) for (keys, vs) in Stonks.groupby(xs, [:symbol])])
 
-  records_by_date::StockRepository = Dict()
-  for symbol in symbols
-    smb_prices = get(prices, symbol, nothing)
-    if isnothing(smb_prices)
-      continue
-    end
-    
-    trades_smb = filter(x -> x.symbol == symbol, trades) |> trs -> sort(trs; by=x -> x.date)
-    first_trade = isempty(trades_smb) ? Dates.today() - Dates.Day(365) : first(trades_smb).date
-    smb_prices = filter(x -> x.date >= first_trade, smb_prices)
+	repository::StockRepository = Dict()
+	for symbol in symbols
+		smb_prices = get(prices, symbol, nothing)
+		if isnothing(smb_prices)
+			continue
+		end
 
-    for p in smb_prices
-      records_by_date[p.date] = push!(get(records_by_date, p.date, Dict()), symbol => p)
-    end
-  end
+		trades_smb = filter(x -> x.symbol == symbol, trades) |> trs -> sort(trs; by=x -> x.date)
+		first_trade = isempty(trades_smb) ? Dates.today() - Dates.Day(365) : first(trades_smb).date
+		smb_prices = filter(x -> x.date >= first_trade, smb_prices)
 
-  return records_by_date
-end
+		for p in smb_prices
+			repository[p.date] = push!(get(repository, p.date, Dict()), symbol => p)
+		end
+	end
 
-function get_record_for_closest_date(
-  repo::StockRepository,
-  date::Date,
-  symbol::String,
-  retries::Int=10,
-)::Union{AssetPrice, Missing}
-  if retries == 0
-    return missing
-  end
-
-  maybe_record = get(repo, date, Dict()) |> res -> get(res, symbol, missing)
-  if !ismissing(maybe_record)
-    return maybe_record
-  else
-    previous_weekday =
-      [date - Dates.Day(i) for i in 1:5] |> ds -> filter(x -> Stonks.is_weekday(x), ds) |> first
-    return get_record_for_closest_date(repo, previous_weekday, symbol, retries - 1)
-  end
-end
-
-function get_record_for_closest_date(
-  forex::Dict{Tuple{Date, String}, Float64},
-  date::Date,
-  currency::String,
-  retries::Int=10,
-)::Union{Float64, Missing}
-  if retries == 0
-    @error("Could not find a close exchange rate for: $currency between $date and $(date + Dates.Day(10))")
-    return missing
-  end
-
-  maybe_record = get(forex, (date, currency), missing)
-  if !ismissing(maybe_record)
-    return maybe_record
-  end
-
-  closest_prev_date = [date - Dates.Day(i) for i in 1:5] |> 
-    ds -> filter(x -> Stonks.is_weekday(x), ds) |> 
-    first
-
-  return get_record_for_closest_date(forex, closest_prev_date, currency, retries - 1)
-end
-
-
-# TODO: Should return Dict{String, Trade}
-function trades_at_date(trades::Vector{Trade}, date::Date)::Dict{String, Int}
-  trades_until_date = filter(t -> t.date <= date, trades)
-  if length(trades_until_date) == 0
-    return Dict()
-  end
-
-  return Dict([
-    (keys.symbol, sum(map(x -> x.shares, collect(values)))) for
-    (keys, values) in Stonks.groupby(trades_until_date, [:symbol])
-  ])
-
-end
-
-function get_assets_at_date(
-  repo::StockRepository,
-  date::Date,
-  trades::Vector{Trade},
-)::Dict{String, AssetPrice}
-  trades_until_date = filter(t -> t.date <= date, trades)
-
-  if length(trades_until_date) == 0
-    return Dict()
-  end
-
-  symbols_at_date::Vector{String} =
-    [
-      (keys.symbol, sum(map(x -> x.shares, collect(values)))) for
-      (keys, values) in Stonks.groupby(trades_until_date, [:symbol])
-    ] |> xs -> [smb for (smb, shares) in xs if shares > 0]
-
-  maybe_assets::Dict{String, AssetPrice} = get(repo, date, Dict())
-  missing_symbols =
-    ismissing(maybe_assets) ? symbols_at_date : setdiff(Set(symbols_at_date), keys(maybe_assets))
-
-  if isempty(missing_symbols)
-    return maybe_assets
-  end
-
-  for symbol in missing_symbols
-    maybe_record = get_record_for_closest_date(repo, date, symbol, 10)
-    if !ismissing(maybe_record)
-      maybe_record.date = date
-      maybe_assets[symbol] = maybe_record
-    else
-      @warn("Could not find any fresh record for $(symbol) at date: $(date)")
-    end
-  end
-
-  return maybe_assets
-end
-
-# TODO: Better compute it from price + asset_ifno
-function to_asset_profile(repo::StockRepository, port::PortfolioInfo)::Dict{String, AssetProfile}
-
-  # TODO: Maybe pass it as an argument
-  # cfg = config_read()
-  dates = sort([d for (d, _) in repo])
-  # symbols = union(cfg.watchlist, Set(map(x -> x.symbol, port.trades)))
-  symbols = Set(map(x -> x.symbol, port.trades))
-  trades = sort(port.trades; by=x -> x.symbol)
-  # trades = vcat([p.trades for (_, p) in cfg.portfolios]...) |> trs -> sort(trs; by=x -> x.symbol)
-  info = Stonks.load(load_stores()[:info])
-
-  records_by_symbol::Dict{String, Vector{StockRecord}} = Dict()
-  for symbol in symbols
-    for date in dates
-      if haskey(repo[date], symbol)
-        record = repo[date][symbol]
-        records_by_symbol[symbol] = push!(get(records_by_symbol, symbol, StockRecord[]), record)
-      end
-    end
-  end
-
-  return Dict([
-    symbol => AssetProfile(;
-      symbol=symbol,
-      dates=map(x -> x.date, records),
-      closes=map(x -> x.close, records),
-      trades=filter(x -> x.symbol == symbol, trades) |> trs -> sort(trs; by=x -> x.date),
-      shares=map(x -> x.shares, records),
-      buys=map(x -> x.buy, records),
-      sells=map(x -> x.sell, records),
-      info=get_info_by_name(info, symbol),
-    ) for (symbol, records) in records_by_symbol
-  ])
-end
-
-
-function convert_price(
-  price::Float64,
-  date::Date,
-  currency::String,
-  forex::Dict{Tuple{Date, String}, Float64},
-)
-  # exchange_rate = get(forex, (date, currency), nothing)
-  exchange_rate = get_record_for_closest_date(forex, date, currency)
-  if isnothing(exchange_rate)
-    @warn("No exchange rate found for currency = $currency on date: $date")
-    nothing
-  end
-
-  return price * exchange_rate
-end
-
-function convert_prices(
-  assets::Dict{String, AssetPrice},
-  date::Date,
-  port::PortfolioInfo,
-  info::Dict{String, AssetInfo},
-  forex::Dict{Tuple{Date, String}, Float64},
-)::Dict{String, AssetPrice}
-  target_currency = uppercase(string(port.currency))
-
-  price_new::Dict{String, AssetPrice} = Dict()
-  for (smb, price) in assets
-    trades_smb = filter(x -> x.symbol == smb, port.trades) |> trs -> sort(trs; by=x -> x.date)
-    inf = get(info, smb, nothing)
-    currency = (isempty(trades_smb) ? inf.currency : string(first(trades_smb).currency)) |> uppercase
-    close = currency != target_currency ? convert_price(price.close, date, currency, forex) : price.close
-    price_new[smb] = AssetPrice(; symbol=smb, date=date, close=close)
-  end
-
-  return price_new
-end
-
-
-function get_trade_summary(trades::Vector{Trade}, dates::Vector{Date}=Date[])::Dict{Tuple{String, Date}, NamedTuple}
-
-  function compute_stuff(vs::Base.Generator)
-      data = collect(vs)
-      t_buys = filter(x -> x.type === Buy, data) 
-      buys = sum(map(x -> x.proceeds - -(abs(x.commission)), t_buys))
-      t_sells = filter(x -> x.type === Sell, data) 
-      sells = sum(map(x -> x.proceeds - abs(x.commission), t_sells))
-      shares=sum(map(x -> x.shares, vs))
-      # share_price = abs(t.proceeds) / abs(t.shares)
-      # avg_price = (abs(buys) - abs(sells)) / shares
-
-      return (
-        shares = shares, 
-        buys=buys,
-        sells=sells,
-        # share_price = sells / shares,
-        avg_price = (abs(buys) - abs(sells)) / shares
-        # avg_price=avg_price
-      )
-  end
-
-  trades_by_date = Dict([
-    (keys.symbol, keys.date) => compute_stuff(vs) 
-    for (keys, vs) in Stonks.groupby(trades, [:symbol, :date])
-  ])
-
-  # sell_trades = Dict([
-  #   date => (shares=abs(t.shares), share_price=abs(t.proceeds) / abs(t.shares)) for
-  #   (date, t) in trades_by_date if t.type === Sell
-  # ])
-
-  # avg_price = (map(abs, buys) .- map(abs, sells)) ./ shares
-
-  # return [
-  #   get(sell_trades, dates[i], missing) |>
-  #   x -> !ismissing(x) ? x.shares * (x.share_price - avg_price[max(i - 1, 1)]) : 0.00 for
-  #   (i, _) in enumerate(avg_price)
-  # ] |> cumsum
-  
-  get_daily_trade(symbol::String, date::Date, extractor::Function, default::T) where {T <: Any} =
-    get(trades_by_date, (symbol, date), missing) |> x -> !ismissing(x) ? extractor(x) : default
-
-   all_dates = (
-    if isempty(dates)
-      tr_dates = unique([x.date for x in trades])
-      [d for d in minimum(tr_dates):maximum(tr_dates)]
-    else
-      dates
-    end
-  )
-  min_date = minimum(all_dates)
-  symbols = unique(map(t -> t.symbol, trades))
-
-  result = Dict()
-  for smb in symbols
-    for date in all_dates
-        # rolling = (
-        shares = sum(map(dt -> get_daily_trade(smb, dt, x -> x.shares, 0), min_date:date))
-        sells = sum(map(dt -> get_daily_trade(smb, dt, x -> x.sells, 0), min_date:date))
-        buys = sum(map(dt -> get_daily_trade(smb, dt, x -> x.buys, 0), min_date:date))
-        avg_price = (abs(buys) - abs(sells)) / shares
-        rolling = (shares=shares, sells=sells, buys=buys, avg_price=avg_price)
-        result[(smb, date)] = rolling
-    end
-  end
-
-  return result
-end
-
-
-function ffill(v::Vector{Union{T, Missing}})::Vector{T} where {T}
-  v[accumulate(max, [i*!ismissing(v[i]) for i in 1:length(v)], init=1)]
+	return repository
 end
 
 function get_forex(target_currency::String)::Dict{Tuple{Date, String}, Float64}
-    Stonks.load(stores[:forex], Dict("target" => [target_currency])) |>
-    fx -> Dict(map(x -> ((x.date, x.base), x.rate), fx))
+	stores = Store.load_stores(config_read().data.dir, arrow)
+	# TODO: Use predicate pushdown after fixing the bug when saving currencies
+	# Stonks.load(stores[:forex], Dict("target" => [target_currency])) |>
+	Stonks.load(stores[:forex]) |>
+	xs -> filter(x -> x.target == target_currency, xs) |> fx -> Dict(map(x -> ((x.date, x.base), x.rate), fx))
+end
+
+function get_latest_exchange_rate(forex::Dict{Tuple{Date, String}, Float64}, base::String)::Float64
+	candidates = [(date, base) for ((date, symbol), _) in forex if symbol == base]
+	if isempty(candidates)
+		error("Could not find any keys for currency: $base")
+	end
+	max_forex_key = maximum(candidates)
+	return forex[max_forex_key]
+end
+
+function get_portfolio_members(port::PortfolioInfo)::Dict{String, PortfolioMember}
+	cfg = config_read()
+	trades = port.trades |> trs -> sort(trs; by=x -> x.symbol)
+	symbols = unique(map(x -> x.symbol, trades))
+	stores = Store.load_stores(cfg.data.dir, arrow)
+	infos = Dict([(x.symbol, x) for x in Stonks.load(stores[:info])])
+	return Dict([
+		smb => PortfolioMember(get(infos, smb, missing), [t for t in trades if t.symbol == smb]) for
+		smb in symbols
+	])
+end
+
+function get_adjusted_price(trade::Trade)
+	price_comission = abs(trade.commission / trade.shares)
+	price_penalty = trade.type == Buy ? abs(price_comission) : -abs(price_comission)
+	return trade.share_price + price_penalty
+end
+
+function get_portfolio_trade_info(port::PortfolioInfo)
+	trades, transfers = port.trades, port.transfers
+	symbols = sort(unique(map(x -> x.symbol, trades)))
+	dates = vcat(map(x -> x.date, trades), map(x -> x.date, transfers)) |> unique |> sort
+	dates_raw = map(d -> Dates.format(d, "yyyy-mm-dd"), dates)
+
+	shares_bought_mat = allocate_matrix(Int64, dates_raw, symbols) # net shares
+	shares_sold_mat = allocate_matrix(Int64, dates_raw, symbols) # net shares
+	shares_bought_price_mat = allocate_matrix(Float64, dates_raw, symbols) # aquisition cost?
+	shares_sold_price_mat = allocate_matrix(Float64, dates_raw, symbols)
+	commissions_mat = allocate_matrix(Float64, dates_raw, symbols)
+	avg_price_mat = allocate_matrix(Union{Float64, Missing}, dates_raw, symbols)
+	transfers_mat = allocate_matrix(Float64, dates_raw, ["CASH"])
+
+	target_currency = uppercase(string(port.currency))
+	forex = get_forex(target_currency)
+	for transfer in sort(port.transfers; by=x -> x.date)
+		transfer_value = transfer.type == Deposit ? abs(transfer.proceeds) : -abs(transfer.proceeds)
+		if transfer.currency != port.currency
+			transfer_value *= get_latest_exchange_rate(forex, uppercase(string(transfer.currency)))
+		end
+		transfers_mat[Dates.format(transfer.date, "yyyy-mm-dd"), "CASH"] += transfer_value
+	end
+
+	for symbol in symbols
+		this_trades = filter(x -> x.symbol == symbol, trades) |> xs -> sort(xs; by=x -> (x.date, x.type))
+		if isempty(this_trades)
+			continue
+		end
+
+		avg_prices = []
+		for (i, trade) in enumerate(this_trades)
+			date_raw = Dates.format(trade.date, "yyyy-mm-dd")
+			commissions_mat[date_raw, symbol] += abs(trade.commission)
+
+			if trade.type == Buy
+				shares_bought_mat[date_raw, trade.symbol] += abs(trade.shares)
+				shares_bought_price_mat[date_raw, trade.symbol] +=
+					abs(trade.share_price) - abs(trade.commission / trade.shares)
+			elseif trade.type == Sell
+				shares_sold_mat[date_raw, trade.symbol] += abs(trade.shares)
+				shares_sold_price_mat[date_raw, trade.symbol] +=
+					abs(trade.share_price) - abs(trade.commission / trade.shares)
+			end
+
+			if i == 1
+				last_avg_price = get_adjusted_price(trade)
+				push!(avg_prices, last_avg_price)
+				avg_price_mat[date_raw, symbol] = last_avg_price
+				continue
+			end
+
+			if trade.type == Sell
+				push!(avg_prices, avg_prices[i - 1])
+				continue
+			end
+
+			prev_trades = this_trades[1:(i - 1)]
+			prev_shares = map(t -> t.shares, prev_trades)
+			total_shares = sum(prev_shares) + trade.shares
+			prev_avg_price = avg_prices[i - 1]
+			new_price = get_adjusted_price(trade)
+			weight = trade.shares / total_shares
+			last_avg_price = prev_avg_price * (1 - weight) + new_price * weight
+			push!(avg_prices, last_avg_price)
+			avg_price_mat[date_raw, symbol] = last_avg_price
+		end
+	end
+
+	# Forward fill avg prices
+	n, m = size(avg_price_mat)
+	println(typeof(avg_price_mat))
+	for j in 1:m
+		avg_price_mat[findall(x -> !ismissing(x) && (isnan(x) || isinf(x)), avg_price_mat[:, j]), j] .= missing
+		i = findfirst(x -> !ismissing(x), avg_price_mat[:, j])
+		if isnothing(i)
+			continue
+		end
+		avg_price_mat[i:n, j] .= ffill(avg_price_mat[i:n, j].array)
+	end
+
+	shares_bought_mat = map(Int, ffill(shares_bought_mat))
+	shares_bought_price_mat = map(Float64, ffill(shares_bought_price_mat))
+	shares_sold_mat = map(Int, ffill(shares_sold_mat))
+	shares_sold_price_mat = map(Float64, ffill(shares_sold_price_mat))
+	transfers_mat = map(Float64, ffill(transfers_mat))
+
+	return (
+		shares_bought=shares_bought_mat,
+		shares_bought_price=shares_bought_price_mat,
+		shares_sold=shares_sold_mat,
+		shares_sold_price=shares_sold_price_mat,
+		avg_price=avg_price_mat,
+		commissions=commissions_mat,
+		transfers=transfers_mat,
+	)
 end
 
 function get_portfolio_dataset(repo::StockRepository, port::PortfolioInfo)::PortfolioDataset
-  dates = Date[]
-  costs::Vector{Union{Float64, Missing}} = Float64[]
-  sells::Vector{Union{Float64, Missing}} = Float64[]
-  market_values::Vector{Union{Float64, Missing}} = Float64[]
-  weights::Dict{Date, Vector{Tuple{String, Float64}}} = Dict()
-  # realized_profits = Float64[]
-  # unrealized_profit = Float64[]
+	trades = port.trades |> trs -> sort(trs; by=x -> x.symbol)
+	symbols = unique(map(x -> x.symbol, trades))
+	target_currency = uppercase(string(port.currency))
+	members = get_portfolio_members(port)
 
-  trades = port.trades |> trs -> sort(trs; by=x -> x.symbol)
-  symbols = unique(map(x -> x.symbol, trades))
-  target_currency = uppercase(string(port.currency))
-  infos = Dict([(x.symbol, x) for x in Stonks.load(stores[:info])])
-  forex = get_forex(target_currency)
-  trademap::Dict{Tuple{String, Date}, NamedTuple} = get_trade_summary(trades)
+	dates_trade = map(x -> x.date, trades)
+	date_min = minimum(dates_trade)
+	date_max = maximum([d for (d, _) in repo])
+	all_dates = [d for d in date_min:date_max]
+	raw_dates = map(d -> Dates.format(d, "yyyy-mm-dd"), all_dates)
 
-  get_trade_value(smb::String, date::Date, extractor::Function, default::T) where {T} =
-    get(trademap, (smb, date), missing) |> x -> !ismissing(x) ? extractor(x) : default
+	close = allocate_matrix(Union{Float64, Missing}, raw_dates, symbols)
+	trade_info = get_portfolio_trade_info(port)
+	# Add data about closing prices
+	for (i, date) in enumerate(all_dates)
+		prices_at_date = Dict([symbol => get_record_for_closest_date(repo, date, symbol) for symbol in symbols])
+		for symbol in symbols
+			maybe_price = get(prices_at_date, symbol, missing)
+			if ismissing(maybe_price)
+				continue
+			end
+			close[i, symbol] = maybe_price.close
+		end
+	end
 
-  portMap = Dict()
-  for date in sort(map(x -> x.date, port.trades))
-    trades_until_date = filter(t -> t.date <= date, trades)
-    assets::Dict{String, AssetPrice} =
-      get_assets_at_date(repo, date, trades_until_date) |>
-      xs -> convert_prices(xs, date, port, infos, forex)
+	# Currency conversions
+	forex = get_forex(target_currency)
+	for symbol in symbols
+		currency = uppercase(string(first(filter(t -> t.symbol == symbol, trades)).currency))
+		println("symbol: $symbol; currency: $currency; target_currency: $target_currency")
+		if currency == target_currency
+			continue
+		end
+		rate = get_latest_exchange_rate(forex, currency)
+		close[:, symbol] .*= rate
+		trade_info.shares_bought_price[:, symbol] .*= rate
+		trade_info.shares_sold_price[:, symbol] .*= rate
+		trade_info.avg_price[:, symbol] .*= rate
+		trade_info.commissions[:, symbol] .*= rate
+	end
 
-    trades_by_smb = [ smb => get(trademap, (smb, date), missing) for (smb, _) in assets ]
-    # d_cost  = sum([!ismissing(trade) ? abs(trade.buys) : 0.0 for trade in trades_by_smb])
-    d_sells = sum([!ismissing(t) ? abs(t.sells) : 0.0 for (_, t) in trades_by_smb])
-    d_buys = sum([!ismissing(t) ? abs(t.buys) : 0.0 for (_, t) in trades_by_smb])
-    # d_avg_price = sum([!ismissing(t) ? abs(t.avg_price) : 0.0 for t in trades_by_smb])
-    d_market_value = sum([(p.close * get_trade_value(smb, date, x -> x.shares, 0)) for (smb, p) in assets])
-
-    function get_weight(smb::String, total_market_value::Float64)::Float64
-      price = get(assets, smb, missing)
-      ismissing(price) && return 0.0
-      return (price.close * get_trade_value(smb, date, x -> x.shares, 0)) / total_market_value
-    end
-
-    weights[date] = [(smb, get_weight(smb, d_market_value)) for smb in symbols]
-
-    portMap[date] = (market_value = d_market_value, cost=d_buys-d_sells, sells=d_sells, buys=d_buys)
-  end
-
-  all_dates = [x for x in minimum(t -> t.date, trades):maximum([k for (k, _) in repo]) if Stonks.is_weekday(x)]
-  for date in all_dates
-    data = get(portMap, date, nothing)
-    push!(dates, date)
-    
-    if isnothing(data)
-      push!(costs, missing)
-      push!(market_values, missing)
-      push!(sells, missing)
-    else
-      push!(costs, data.cost)
-      push!(market_values, data.market_value)
-      push!(sells, data.sells)
-    end
-  end
-  
-  members = Dict([ smb => 
-    PortfolioMember(get(infos, smb, missing), [t for t in trades if t.symbol == smb])
-    for smb in symbols
-  ])
-
-  PortfolioDataset(; 
-    name=port.name, 
-    dates=dates, 
-    cost=ffill(costs), 
-    market_value=ffill(market_values), 
-    members=members, 
-    weights=weights
-  )
-end
-
-function get_portfolio_member_dataset(repo::StockRepository, port::PortfolioInfo, symbol::String)::PortfolioMemberDataset
-  dates = Date[]
-  closes::Vector{Union{Float64, Missing}} = Float64[]
-  shares::Vector{Union{Float64, Missing}} = Int64[]
-  costs::Vector{Union{Float64, Missing}} = Float64[]
-  sells::Vector{Union{Float64, Missing}} = Float64[]
-  market_values::Vector{Union{Float64, Missing}} = Float64[]
-  avg_prices::Vector{Union{Float64, Missing}} = Float64[]
-
-  trades = filter(t -> t.symbol == symbol, port.trades) |> trs -> sort(trs; by=x -> x.symbol)
-  min_date = minimum(t -> t.date, trades)
-  max_date = maximum([k for (k, _) in repo])
-  all_dates = [x for x in min_date:max_date if Stonks.is_weekday(x)]
-  target_currency = uppercase(string(port.currency))
-
-  info = Stonks.load(stores[:info]) |> xs -> filter(x -> x.symbol==symbol, xs) |> xs -> isempty(xs) ? missing : first(xs)
-  forex = get_forex(target_currency)
-  trademap::Dict{Tuple{String, Date}, NamedTuple} = get_trade_summary(trades)
-
-  get_trade_value(smb::String, date::Date, extractor::Function, default::T) where {T} =
-    get(trademap, (smb, date), missing) |> x -> !ismissing(x) ? extractor(x) : default
-  
-  status_sparse = Dict()
-  for date in unique(map(t -> t.date, trades)) 
-    trades_until_date = filter(t -> t.date <= date, trades)
-    currency = string(first(trades_until_date).currency) |> uppercase
-    price = (
-      if currency != target_currency
-        price_original = get_record_for_closest_date(repo, date, symbol)
-        new_close = convert_price(price_original, date, currency, forex)
-        AssetPrice(; symbol=symbol, date=date, close=new_close)
-      else
-        get_record_for_closest_date(repo, date, symbol)
-      end
-    )
-    trades_by_date = get(trademap, (symbol, date), missing)
-    res = (
-      close = price.close,
-      shares = trades_by_date.shares,
-      market_value = trades_by_date.shares * price.close,
-      avg_price = trades_by_date.avg_price,
-      sells = trades_by_date.sells,
-      buys = trades_by_date.buys,
-    )
-    status_sparse[date] = res
-  end
-
-  for date in all_dates
-    push!(dates, date)
-    
-    data = get(status_sparse, date, nothing)
-    if isnothing(data)
-      push!(closes, missing)
-      push!(shares, missing)
-      push!(costs, missing)
-      push!(sells, missing)
-      push!(market_values, missing)
-    else
-      push!(closes, data.close)
-      push!(shares, data.shares)
-      push!(costs, data.buys - data.sells)
-      push!(sells, data.sells)
-      push!(market_values, data.market_value)
-      push!(avg_prices, data.avg_price)
-    end
-  end
-
-  PortfolioMemberDataset(; 
-    symbol=symbol,
-    dates=dates,
-    closes=ffill(closes),
-    trades=trades,
-    shares=ffill(shares),
-    costs=ffill(costs),
-    sells=ffill(sells),
-    info=info
-  )
-
-end
-
-# TODO: Check if we need this
-function compute_portfolio_holdings(trades::Vector{Trade})::Vector{FinancialAsset}
-  groups = Stonks.groupby(trades, [:symbol])
-  weights = [map(x -> x.shares, vs) / sum(map(x -> x.shares, vs)) for (_, vs) in groups]
-  [
-    FinancialAsset(;
-      symbol=keys.symbol,
-      trades=collect(values),
-      shares=sum(map(x -> x.shares, values)),
-      date_first_trade=minimum(map(x -> x.date, values)),
-      avg_price=sum(map(x -> x.share_price, values) * first(weights[i])),
-    ) for (i, (keys, values)) in enumerate(groups)
-  ]
+	return PortfolioDataset(;
+		name=port.name,
+		members=members,
+		close=fill_missing(close, 0.0),
+		shares_bought=expand_matrix(trade_info.shares_bought, raw_dates, symbols),
+		shares_bought_price=expand_matrix(trade_info.shares_bought_price, raw_dates, symbols),
+		shares_sold=expand_matrix(trade_info.shares_sold, raw_dates, symbols),
+		shares_sold_price=expand_matrix(trade_info.shares_sold_price, raw_dates, symbols),
+		avg_price=expand_matrix(trade_info.avg_price, raw_dates, symbols) |> ffill |> xs -> fill_missing(xs, 0.0),
+		commissions=expand_matrix(trade_info.commissions, raw_dates, symbols),
+		transfers=trade_info.transfers,
+	)
 end

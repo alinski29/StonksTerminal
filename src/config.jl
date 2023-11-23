@@ -74,7 +74,6 @@ function config_init()
           currency=currency,
           transfers=Transfer[],
           trades=Trade[],
-          holdings=FinancialAsset[],
         ),
       )
     else

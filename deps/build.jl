@@ -1,1 +1,2 @@
-using StonksTerminal; StonksTerminal.comonicon_install()
+using StonksTerminal;
+StonksTerminal.comonicon_install();

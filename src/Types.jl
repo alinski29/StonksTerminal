@@ -8,7 +8,7 @@ export Currency, USD, EUR, RON, CAD, GBP, CHF
 export Trade, TradeType, Buy, Sell
 export FileFormat, csv, arrow
 export Transfer, TransferType, Deposit, Withdrawal
-export StockRepository, PortfolioInfo, PortfolioMember, PortfolioDataset
+export PortfolioInfo, PortfolioMember, PortfolioDataset
 
 @enum Currency USD EUR RON CAD GBP CHF
 @enum TransferType Deposit Withdrawal
@@ -22,18 +22,8 @@ abstract type Operation end
   type::TransferType
   currency::Currency
   proceeds::Float64
-  function Transfer(
-    date::Date,
-    type::TransferType,
-    currency::Currency,
-    proceeds,
-  )
-    return new(
-      date,
-      type,
-      currency,
-      type === Deposit ? abs(proceeds) : -(abs(proceeds)),
-    )
+  function Transfer(date::Date, type::TransferType, currency::Currency, proceeds::Float64)
+    return new(date, type, currency, type === Deposit ? abs(proceeds) : -(abs(proceeds)))
   end
 end
 
@@ -75,8 +65,6 @@ end
   transfers::Vector{Transfer}
   trades::Vector{Trade}
 end
-
-StockRepository = Dict{Date, Dict{String, AssetPrice}}
 
 @kwdef struct PortfolioMember
   info::Union{AssetInfo, Missing}

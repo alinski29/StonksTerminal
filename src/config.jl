@@ -68,14 +68,7 @@ function config_init()
     if collect_user_input("Would you like to add a portfolio: y/n ?", Bool)
       name = collect_user_input("Portfolio name", String)
       currency = collect_user_input("Portfolio currency", Currency)
-      Dict(
-        name => PortfolioInfo(;
-          name=name,
-          currency=currency,
-          transfers=Transfer[],
-          trades=Trade[],
-        ),
-      )
+      Dict(name => PortfolioInfo(; name=name, currency=currency, transfers=Transfer[], trades=Trade[]))
     else
       Dict{String, PortfolioInfo}()
     end
@@ -91,4 +84,3 @@ function config_init()
   config_write(cfg)
   @info("Configuration succesfully written to $(CFG_PATH) \n")
 end
-

@@ -6,7 +6,7 @@ using StonksTerminal: parse_list, config_read, config_write
 @cast function items(items::String)
   cfg = config_read()
   symbols = parse_list(items)
-  
+
   if length(symbols) > 0
     @info("Adding $(size(symbols)) tickers to watchlist")
     cfg.watchlist = unique(union(cfg.watchlist, symbols))

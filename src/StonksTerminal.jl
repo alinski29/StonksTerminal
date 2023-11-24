@@ -23,6 +23,8 @@ Module for managing your watchlist
 """
 @cast Watchlist
 
+include("processing.jl")
+
 include("Portfolio.jl")
 """
 Module for interacting with portfolio: adding transfers & trades

@@ -18,17 +18,12 @@ function load_testconfig()
     Trade(Date("2023-01-30"), Buy, "AAPL", 1, 22.0, 1.00, USD, 1.00),
   ]
 
-  portfolios = Dict("test" => PortfolioInfo(;
-    name="test",
-    currency=USD,
-    transfers=transfers,
-    trades=trades
-  ))
+  portfolios = Dict("test" => PortfolioInfo(; name="test", currency=USD, transfers=transfers, trades=trades))
 
   return Config(;
     data=StoreConfig(; dir="/tmp/StonksTerminal/data", format=arrow),
     watchlist=Set(["AAPL", "AMZN", "MSFT", "MCD", "GE"]),
     portfolios=portfolios,
-    currencies=Set([USD, EUR])
+    currencies=Set([USD, EUR]),
   )
 end

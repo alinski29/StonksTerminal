@@ -69,7 +69,6 @@ using StonksTerminal: format_number, parse_pretty_number, allocate_matrix, expan
     @test mat_ffill["r1", "c2"] === missing
     @test mat_ffill[["r2", "r3"], "c2"].array == [1, 1]
 
-
     mat = allocate_matrix(Int64, ["r1", "r2", "r3"], ["c1", "c2"])
     mat["r1", "c1"] .= 1
     mat["r2", "c2"] .= 1

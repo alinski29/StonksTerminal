@@ -15,7 +15,10 @@ using StonksTerminal.Types
   config = config_read()
   client = build_client()
   stores = load_stores(config.data.dir, config.data.format)
-  [update_store(store, client, config; name=string(name), financials=financials, info=info) for (name, store) in stores]
+  [
+    update_store(store, client, config; name=string(name), financials=financials, info=info) for
+    (name, store) in stores
+  ]
 end
 
 function load_stores(path::String, format::FileFormat)
@@ -23,13 +26,8 @@ function load_stores(path::String, format::FileFormat)
   writer = get_writer(format)
 
   Dict(
-    :info => FileStore{AssetInfo}(;
-      path="$path/info",
-      ids=[:symbol],
-      format="arrow",
-      reader=reader,
-      writer=writer
-    ),
+    :info =>
+      FileStore{AssetInfo}(; path="$path/info", ids=[:symbol], format="arrow", reader=reader, writer=writer),
     :price => FileStore{AssetPrice}(;
       path="$path/price",
       ids=[:symbol],
@@ -37,7 +35,7 @@ function load_stores(path::String, format::FileFormat)
       format="arrow",
       time_column="date",
       reader=reader,
-      writer=writer
+      writer=writer,
     ),
     :forex => FileStore{ExchangeRate}(;
       path="$path/forex",
@@ -46,35 +44,35 @@ function load_stores(path::String, format::FileFormat)
       format="arrow",
       time_column="date",
       reader=reader,
-      writer=writer
+      writer=writer,
     ),
     :balance_sheet => FileStore{BalanceSheet}(;
       path="$path/balance_sheet",
       ids=[:symbol],
       format="arrow",
       reader=reader,
-      writer=writer
+      writer=writer,
     ),
     :income_statement => FileStore{IncomeStatement}(;
       path="$path/income_statement",
       ids=[:symbol],
       format="arrow",
       reader=reader,
-      writer=writer
+      writer=writer,
     ),
     :cashflow_statement => FileStore{CashflowStatement}(;
       path="$path/cashflow_statement",
       ids=[:symbol],
       format="arrow",
       reader=reader,
-      writer=writer
+      writer=writer,
     ),
     :earnings => FileStore{Earnings}(;
       path="$path/earnings",
       ids=[:symbol],
       format="arrow",
       reader=reader,
-      writer=writer
+      writer=writer,
     ),
   )
 end
@@ -82,10 +80,9 @@ end
 function get_writer(format::FileFormat)::Function
   writers = Dict(
     csv => Stonks.Stores.reader_csv,
-    arrow =>
-      function writer(data::Vector{T}, path::String) where {T<:AbstractStonksRecord}
-        Arrow.write(path, Stonks.to_table(unique(data)))
-      end
+    arrow => function writer(data::Vector{T}, path::String) where {T <: AbstractStonksRecord}
+      Arrow.write(path, Stonks.to_table(unique(data)))
+    end,
   )
   return writers[format]
 end
@@ -93,10 +90,9 @@ end
 function get_reader(format::FileFormat)::Function
   readers = Dict(
     csv => Stonks.Stores.writer_csv,
-    arrow =>
-      function reader(path::String, ::Type{T}) where {T<:AbstractStonksRecord}
-        apply_schema(collect(Tables.rows(Arrow.Table(path))), T)
-      end
+    arrow => function reader(path::String, ::Type{T}) where {T <: AbstractStonksRecord}
+      apply_schema(collect(Tables.rows(Arrow.Table(path))), T)
+    end,
   )
   return readers[format]
 end
@@ -104,20 +100,29 @@ end
 function build_client()
   yc = YahooClient(ENV["YAHOOFINANCE_TOKEN"])
   # ac = AlphavantageJSONClient(ENV["ALPHAVANTAGE_TOKEN"])
-  return Stonks.APIClient(Dict(
-    "price" => yc.resources["price"],
-    "info" => yc.resources["info"],
-    "exchange" => yc.resources["exchange"],
-    "income_statement" => yc.resources["income_statement"],
-    "balance_sheet" => yc.resources["balance_sheet"],
-    "cashflow_statement" => yc.resources["cashflow_statement"],
-    "earnings" => yc.resources["earnings"],
-  ))
+  return Stonks.APIClient(
+    Dict(
+      "price" => yc.resources["price"],
+      "info" => yc.resources["info"],
+      "exchange" => yc.resources["exchange"],
+      "income_statement" => yc.resources["income_statement"],
+      "balance_sheet" => yc.resources["balance_sheet"],
+      "cashflow_statement" => yc.resources["cashflow_statement"],
+      "earnings" => yc.resources["earnings"],
+    ),
+  )
 end
 
-get_type_param(::FileStore{T}) where {T<:AbstractStonksRecord} = T
+get_type_param(::FileStore{T}) where {T <: AbstractStonksRecord} = T
 
-function update_store(store::FileStore, client::APIClient, cfg::Config; name::String, financials::Bool=false, info::Bool=false)
+function update_store(
+  store::FileStore,
+  client::APIClient,
+  cfg::Config;
+  name::String,
+  financials::Bool=false,
+  info::Bool=false,
+)
   S = get_type_param(store)
   #@TODO: Remove hardocding here
   min_date = Date("2017-01-01")

@@ -1,67 +1,72 @@
-using Comonicon
-using Stonks
-using StonksTerminal.Types
-using StonksTerminal: Config, config_read, config_write
-using StonksTerminal: collect_user_input, parse_string, format_number, parse_pretty_number
+using Dates
 
-function add_trade(type::TradeType, name::Union{String, Nothing}=nothing)
-  cfg = config_read()
-  port = get_portfolio(cfg, name)
+using StonksTerminal: get_basic_stats, format_number, parse_pretty_number
+using StonksTerminal.Types: PortfolioDataset
+using StonksTerminal.Portfolio: get_returns
+using UnicodePlots
+using PrettyTables
 
-  date = collect_user_input("Enter date in format 'yyyy-mm-dd': ", Date)
-  symbol = collect_user_input("Symbol (ticker): ", String)
-  shares = collect_user_input("Number of shares: ", Int64)
-  share_price = collect_user_input("Share price: ", Float64)
-  commission = collect_user_input("Commission: ", Float64)
-  currency = collect_user_input("Currency.", Currency)
-  exchange_rate = (
-    if currency != port.currency
-      collect_user_input("Exchange rate: ", Float64)
-    else
-      nothing
-    end
-  )
+function plot_portfolio(
+  ds::PortfolioDataset;
+  from::Union{Missing, Date}=missing,
+  to::Union{Missing, Date}=missing,
+)
+  n, _ = size(ds.close)
+  row_names, _ = names(ds.close)
+  dates = map(Date, row_names)
 
-  trade_type = type === Buy ? Buy : Sell
-  trade = Trade(date, trade_type, symbol, shares, share_price, commission, currency, exchange_rate)
-  new_trades = sort(vcat(port.trades, [trade]); by=x -> x.date)
+  i_start = !ismissing(from) ? findfirst(d -> d >= from, dates) : 1
+  i_end = !ismissing(to) ? findfirst(d -> d >= to, dates) : n
 
-  cfg.portfolios[port.name].trades = new_trades
+  net_shares = cumsum(ds.shares_bought[i_start:i_end, :] .- ds.shares_sold[i_start:i_end, :]; dims=1)
+  market_value = get_market_value(ds)[i_start:i_end, :]
+  cost = net_shares .* ds.avg_price[i_start:i_end, :]
+  dates = dates[i_start:i_end]
 
-  config_write(cfg)
+  # unrealized_profit = sum(market_value .- cost; dims=2)[:, 1]
+  port_cost = sum(cost; dims=2)[:, 1]
+  # print(port_cost)
+  port_market_value = sum(market_value; dims=2)[:, 1]
+
+  stats = get_basic_stats(vcat(port_market_value.array, port_cost.array))
+  y_min = stats.min - 0.1 * stats.std
+  y_max = stats.max + 0.1 * stats.std
+
+  lineplot(dates, port_market_value; ylim=(y_min, y_max), width=100)
 end
 
-function get_portfolio(config::Config, name::Union{String, Nothing}=nothing)::PortfolioInfo
-  if length(keys(config.portfolios)) <= 1
-    return config.portfolios[first(keys(config.portfolios))]
-  end
+function plot_weights(ds::PortfolioDataset)
+  n, _ = size(ds.close)
+  market_value = get_market_value(ds)[n, :] |> xs -> filter(x -> x > 0, xs) |> xs -> sort(xs; rev=true)
+  heights = map(x -> round(x) |> Int, market_value.array)
+  text = first(names(market_value))
 
-  names = [p.name for p in config.portfolios]
-  if name === nothing
-    @info("Multiple portfolios: enter the name: $(join(names, ", "))")
-    get_portfolio(config, parse_string(readline()))
-  elseif !(name in keys(config.portfolios))
-    @info("$name is not a valid portfolio name. Choose again between: $(join(names, ", "))")
-    get_portfolio(config, nothing)
-  else
-    return config.portfolios[name]
-  end
+  barplot(text, heights; xlabel="Market value")
 end
 
-function transfer_funds(; type::Union{TransferType, Nothing}=nothing, name::Union{String, Nothing}=nothing)
-  config = config_read()
-  port = get_portfolio(config, name)
+function plot_returns(
+  ds::PortfolioDataset;
+  from::Union{Nothing, Date}=nothing,
+  to::Union{Nothing, Date}=nothing,
+)
+  n, _ = size(ds.close)
+  row_names, _ = names(ds.close)
+  dates = map(Date, row_names)
+  is = map_dates_to_indices(ds.close, from, to)
 
-  date = collect_user_input("Enter date in format 'yyyy-mm-dd': ", Date)
-  transfer_type = isnothing(type) ? collect_user_input("Enter transfer type: ", TransferType) : type
-  currency = collect_user_input("Portfolio currency.", Currency)
-  proceeds = collect_user_input("Enter the transfer value (proceeds)", Float64)
+  returns = get_returns(ds; from=from, to=to)
+  weights = get_weights(ds; from=from, to=to)
+  port_returns = sum(returns .* weights; dims=2)[:, 1]
 
-  push!(port.transfers, Transfer(date, transfer_type, currency, proceeds))
-  port.transfers = sort(port.transfers; by=x -> x.date)
-  config.portfolios[port.name] = port
+  stats = get_basic_stats(port_returns.array)
+  y_min = stats.min - 0.1 * stats.std
+  y_max = stats.max + 0.1 * stats.std
 
-  config_write(config)
+  plt = lineplot(dates[is], port_returns; ylim=(y_min, y_max), width=100)
+
+  neg_data = [(r, d) for (r, d) in zip(port_returns, dates[is]) if r < 0.0]
+  lineplot!(plt, map(x -> x[2], neg_data), map(x -> x[1], neg_data); color=:red)
+  hline!(plt, 0; color=:white)
 end
 
 function print_summary_table(ds::PortfolioDataset)
@@ -141,7 +146,7 @@ function print_summary_table(ds::PortfolioDataset)
   # Recompute weights to include cash
   data[1:(n - 1), "weight"] .= data[1:(n - 1), "value"] ./ sum(data[1:(n - 1), "value"])
 
-	# Pretty table formatting
+  # Pretty table formatting
   data[n, "return"] = (data[n, "value"] / data[n, "expense"]) - 1
   data[:, "close"] .= map(format_number, data[:, "close"])
   data[:, "average"] .= map(format_number, data[:, "average"])
@@ -159,8 +164,8 @@ function print_summary_table(ds::PortfolioDataset)
     vcat("symbol", colnames),
     ["", "", "price \$", "price \$", "market \$", "\$", "%", "%", "profit \$", "profit \$", "\$"],
   )
-	
-	# Highlight profits with green, losses with red and total column
+
+  # Highlight profits with green, losses with red and total column
   idx_color_unrlzd = findall(x -> x in ["unrealized", "return"], header[1])
   idx_color_rlzd = findall(x -> x in ["realized"], header[1])
   hl_green_unrlzd = Highlighter(

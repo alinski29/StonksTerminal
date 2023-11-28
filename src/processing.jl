@@ -12,7 +12,6 @@ function load_prices(
   from::Union{Date, Nothing}=nothing,
   to::Union{Date, Nothing}=nothing,
 )::NamedMatrix{Union{Float64, Missing}}
-
   stores = Store.load_stores(cfg.data.dir, arrow)
   dt_from = isnothing(from) ? Date("1970-01-01") : from
   dt_to = isnothing(to) ? Dates.today() : to

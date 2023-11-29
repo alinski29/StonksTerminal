@@ -90,11 +90,15 @@ function ffill(mat::Union{NamedMatrix{T}, NamedMatrix{Union{T, Missing}}}) where
   return mat
 end
 
-function fill_missing(mat::NamedMatrix, default::Number)
+function fill_missing(mat::NamedMatrix{Union{T, Missing}}, default::T) where T <: Number
   res = allocate_matrix(typeof(default), mat.dicts[1].keys, mat.dicts[2].keys)
   _, m = size(res)
   for j in 1:m
-    res[:, j] .= map(x -> Float64(!ismissing(x) ? x : 0.0), mat[:, j])
+    if typeof(default) <: Int
+      res[:, j] .= map(x -> Int(!ismissing(x) ? x : default), mat[:, j])
+    else
+      res[:, j] .= map(x -> Float64(!ismissing(x) ? x : default), mat[:, j])
+    end
   end
   return res
 end

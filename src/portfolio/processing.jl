@@ -47,7 +47,6 @@ function get_capital_gains(
   to::Union{Date, Nothing}=nothing,
 )::NamedMatrix{Float64}
   slice = map_dates_to_indices(p.close, from, to)
-  println(slice)
   net_shares = cumsum(p.shares_bought .- p.shares_sold; dims=1)[slice, :]
 
   # TODO - This needs to be computed from returns
@@ -154,7 +153,6 @@ function get_portfolio_trade_info(port::PortfolioInfo, exchange_rates::Dict{Tupl
 
   # Forward fill avg prices
   n, m = size(avg_price_mat)
-  println(typeof(avg_price_mat))
   for j in 1:m
     avg_price_mat[findall(x -> !ismissing(x) && (isnan(x) || isinf(x)), avg_price_mat[:, j]), j] .= missing
     i = findfirst(x -> !ismissing(x), avg_price_mat[:, j])

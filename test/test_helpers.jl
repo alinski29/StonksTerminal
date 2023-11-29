@@ -1,9 +1,8 @@
-
 using Dates
-using Test
 using NamedArrays
+using Test
 
-using StonksTerminal: format_number, parse_pretty_number, allocate_matrix, expand_matrix, ffill
+using StonksTerminal: format_number, parse_pretty_number, allocate_matrix, expand_matrix, ffill, fill_missing
 
 @testset "Utilities" begin
 
@@ -13,7 +12,6 @@ using StonksTerminal: format_number, parse_pretty_number, allocate_matrix, expan
     @test format_number(-12345.6789) == "-12,345.68"
     @test format_number(0) == "0"
     @test format_number(999999999999999) == "999,999,999,999,999"
-    # @test format_number(-9876543.21) == "-9,876,543.21"
     @test format_number(42.0) == "42.00"
     @test format_number(4.999) == "5.00"
     @test format_number(4.001) == "4.00"
@@ -76,6 +74,13 @@ using StonksTerminal: format_number, parse_pretty_number, allocate_matrix, expan
     mat_ffill = ffill(mat)
     @test mat_ffill[:, "c1"].array == [1, 0, 0]
     @test mat_ffill[:, "c2"].array == [0, 1, 0]
+  end
+
+  @testset "fill_missing" begin
+    mat = allocate_matrix(Union{Int, Missing}, ["r1", "r2", "r3"], ["c1", "c2"]) |> 
+      xs -> fill_missing(xs, 42)
+    print(mat)
+    @test all(x -> x == 42, mat)
   end
 
   # @testset "map_date_to_indices" begin 

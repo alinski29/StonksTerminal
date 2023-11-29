@@ -70,3 +70,81 @@ function compute_return(
 
   return cumprod(daily_returns; dims=1) .- 1
 end
+
+function convert_to_monthly(data::NamedMatrix)
+  raw_dates, symbols = names(data)
+  date_min = Date(minimum(raw_dates))
+
+  month_start = Dates.Month(date_min).value
+  year_start = Dates.Year(date_min).value
+  today = Dates.today()
+  year_end = Dates.Year(today).value
+  month_end = Dates.Month(today).value
+  dates_indx = String[]
+  month_current = month_start
+  year_current = year_start
+
+  while year_current < year_end || (year_current == year_end && month_current <= month_end)
+    date_candidates = map(i -> "$year_current-$(lpad(string(month_current), 2, '0'))-0$i", 1:9)
+    idx_candidate = findfirst(date -> date in raw_dates, date_candidates)
+
+    if isnothing(idx_candidate)
+    else
+      date = date_candidates[idx_candidate]
+      push!(dates_indx, date)
+    end
+
+    if month_current == 12
+      year_current += 1
+      month_current = 1
+    else
+      month_current += 1
+    end
+  end
+
+  res = allocate_matrix(Union{Float64, Missing}, dates_indx, symbols)
+  for date in dates_indx
+    res[date, :] .= data[date, :]
+  end
+
+  return res
+end
+
+function compute_correlation_matrix(
+  prices::NamedMatrix;
+  min_obs::Int=24,
+  max_obs::Int=48,
+  frequency::String="monthly",
+)
+  data = convert_to_monthly(prices)
+  returns = compute_return(fill_missing(data, 0.0))
+  _, symbols = names(returns)
+
+  corr_mat = allocate_matrix(Union{Float64, Missing}, symbols, symbols)
+  for symbol in symbols
+    ok_indx = findall(x -> x != 0.0, returns[:, symbol])
+    idx_slice = (
+      if length(ok_indx) >= max_obs
+        ok_indx[(length(ok_indx) - max_obs):length(ok_indx)]
+      elseif length(ok_indx) >= min_obs
+        ok_indx
+      else
+        nothing
+      end
+    )
+    if isnothing(idx_slice)
+      corr_mat[symbol, symbol] = missing
+      continue
+    end
+
+    for dest_symbol in symbols
+      if symbol == dest_symbol
+        corr_mat[symbol, symbol] = 1.0
+      else
+        corr_mat[symbol, dest_symbol] = cor(returns[idx_slice, symbol], returns[idx_slice, dest_symbol])
+      end
+    end
+  end
+
+  return corr_mat
+end

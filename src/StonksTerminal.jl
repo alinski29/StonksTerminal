@@ -5,6 +5,7 @@ using Stonks
 
 include("Types.jl")
 include("helpers.jl")
+include("charts.jl")
 
 include("config.jl")
 """

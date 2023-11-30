@@ -58,6 +58,7 @@ function compute_return(
   close::NamedMatrix{Float64};
   from::Union{Date, Nothing}=nothing,
   to::Union{Date, Nothing}=nothing,
+  cummulative::Bool=true,
 )::NamedMatrix{Float64}
   slice = map_dates_to_indices(close, from, to)
   row_names, col_names = names(close[slice, :])
@@ -68,7 +69,11 @@ function compute_return(
     close[(first(slice) + 1):last(slice), :] ./ close[first(slice):(last(slice) - 1), :] |>
     mat -> map(x -> isnan(x) || isinf(x) ? 1.0 : x, mat)
 
-  return cumprod(daily_returns; dims=1) .- 1
+  if cummulative
+    return cumprod(daily_returns; dims=1) .- 1
+  else
+    return daily_returns .- 1
+  end
 end
 
 function convert_to_monthly(data::NamedMatrix)

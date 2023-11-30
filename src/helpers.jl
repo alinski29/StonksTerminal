@@ -47,10 +47,10 @@ function collect_user_input(msg::String, ::Type{T})::T where {T}
   return maybe_res
 end
 
-function format_number(num::Number)::String
+function format_number(num::Number; decimals::Int=2)::String
   digits, decimals = (
     if typeof(num) <: AbstractFloat
-      str = string(round(num; digits=2))
+      str = string(round(num; digits=decimals))
       splits = split(str, "."; limit=2)
       splits[1], lpad(splits[2], 2, "0")
     else

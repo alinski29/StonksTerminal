@@ -1,8 +1,9 @@
 using Dates
 
-using StonksTerminal: get_basic_stats, format_number, parse_pretty_number
+using StonksTerminal: get_basic_stats, format_number, parse_pretty_number, convert_to_monthly
 using StonksTerminal.Types: PortfolioDataset
 using StonksTerminal.Portfolio: get_returns
+using Statistics
 using UnicodePlots
 using PrettyTables
 
@@ -73,6 +74,21 @@ function print_summary_table(ds::PortfolioDataset)
   n, _ = size(ds.close)
   raw_dates, symbols = names(ds.close)
 
+  returns =
+    convert_to_monthly(ds.close) |>
+    ffill |>
+    xs -> fill_missing(xs, 0.0) |> xs -> compute_return(xs; cummulative=false) |> xs -> xs[2:size(xs)[1], :]
+
+  weights =
+    get_weights(ds) |>
+    ffill |>
+    convert_to_monthly |>
+    xs -> fill_missing(xs, 0.0) |> xs -> xs[2:size(xs)[1], :]
+
+  # TODO: Consider only when shares were held
+  monthly_returns = sum(returns; dims=1) / size(returns)[1] |> xs -> xs[1, :]
+  monthly_std = map(name -> std(returns[:, name]), names(returns)[2])
+
   net_shares = cumsum(ds.shares_bought .- ds.shares_sold; dims=1)[n, :]
   realized_profit = get_realized_profit(ds)[n, :]
   expense = ds.avg_price[n, :] .* net_shares
@@ -86,11 +102,7 @@ function print_summary_table(ds::PortfolioDataset)
   port_return = profit ./ expense
   weight = mkt_value ./ sum(mkt_value)
   commissions = cumsum(ds.commissions; dims=1)[n, :]
-  # currency = map(s -> ds.members[s].info.currency, col_names)
-  # stock_exchange = map(s -> ds.members[s].info.exchange, col_names)
-  # date_first_trade = map(s -> ds.members[s].trades |> xs -> map(x -> x.date, xs) |> minimum,  col_names)
 
-  # idx = findall(x -> x > 0, net_shares)
   idx = eachindex(net_shares)
   colnames = [
     "shares",
@@ -100,6 +112,8 @@ function print_summary_table(ds::PortfolioDataset)
     "expense",
     "weight",
     "return",
+    "return_monthly",
+    "stdev_monthly",
     "unrealized",
     "realized",
     "commissions",
@@ -116,6 +130,8 @@ function print_summary_table(ds::PortfolioDataset)
         expense,
         weight,
         port_return,
+        monthly_returns,
+        monthly_std,
         profit,
         realized_profit,
         commissions,
@@ -143,6 +159,10 @@ function print_summary_table(ds::PortfolioDataset)
     data[n, col] = sum(data[1:(n - 1), col])
   end
 
+  # Fill monthly return & stdev TOTAL rows
+  data[n, "return_monthly"] = sum(returns .* weights; dims=2) |> mean
+  data[n, "stdev_monthly"] = sum(monthly_std .* weight, dims=2) |> mean
+
   # Recompute weights to include cash
   data[1:(n - 1), "weight"] .= data[1:(n - 1), "value"] ./ sum(data[1:(n - 1), "value"])
 
@@ -150,19 +170,37 @@ function print_summary_table(ds::PortfolioDataset)
   data[n, "return"] = (data[n, "value"] / data[n, "expense"]) - 1
   data[:, "close"] .= map(format_number, data[:, "close"])
   data[:, "average"] .= map(format_number, data[:, "average"])
-  data[:, "shares"] .= map(x -> format_number(Int(x)), data[:, "shares"])
+  data[:, "shares"] .= map(x -> format_number(Float64(x)), data[:, "shares"])
   data[:, "value"] .= map(x -> format_number(Int(round(x))), data[:, "value"])
   data[:, "expense"] .= map(x -> format_number(Int(round(x))), data[:, "expense"])
   data[:, "unrealized"] .= map(x -> format_number(Int(round(x))), data[:, "unrealized"])
   data[:, "realized"] .= map(x -> format_number(Int(round(x))), data[:, "realized"])
   data[:, "return"] .= map(x -> "$(round(x * 100, digits=2)) %", data[:, "return"])
+  data[:, "return_monthly"] .= map(x -> "$(round(x * 100, digits=2)) %", data[:, "return_monthly"])
+  data[:, "stdev_monthly"] .= map(x -> "$(round(x * 100, digits=2)) %", data[:, "stdev_monthly"])
   data[:, "weight"] .= map(x -> "$(round(x * 100, digits=2)) %", data[:, "weight"])
   data[:, "commissions"] .= map(x -> format_number(-abs(x)), data[:, "commissions"])
   data[(n - 1):n, ["shares", "close", "average"]] .= ""
 
+  #data[findfirst(x -> x == 0, data[:, "shares"])]
+
   header = (
-    vcat("symbol", colnames),
-    ["", "", "price \$", "price \$", "market \$", "\$", "%", "%", "profit \$", "profit \$", "\$"],
+    map(x -> split(x, "_")[1], vcat("symbol", colnames)),
+    [
+      "",
+      "",
+      "price \$",
+      "price \$",
+      "market \$",
+      "\$",
+      "%, total",
+      "%, total",
+      "%, monthly",
+      "%, monthly",
+      "profit \$",
+      "profit \$",
+      "\$",
+    ],
   )
 
   # Highlight profits with green, losses with red and total column

@@ -31,7 +31,7 @@ struct Trade <: Operation
   date::Date
   type::TradeType
   symbol::String
-  shares::Int64
+  shares::Float64
   share_price::Float64
   commission::Float64
   currency::Currency
@@ -40,7 +40,7 @@ struct Trade <: Operation
     date::Date,
     type::TradeType,
     symbol::String,
-    shares::Int64,
+    shares::Float64,
     share_price::Float64,
     commission::Float64=0.0,
     currency::Currency=USD,
@@ -75,9 +75,9 @@ end
   name::String
   members::Dict{String, PortfolioMember}
   close::NamedMatrix{Float64}
-  shares_bought::NamedMatrix{Int}
+  shares_bought::NamedMatrix{Float64}
   shares_bought_price::NamedMatrix{Float64}
-  shares_sold::NamedMatrix{Int}
+  shares_sold::NamedMatrix{Float64}
   shares_sold_price::NamedMatrix{Float64}
   avg_price::NamedMatrix{Float64}
   commissions::NamedMatrix{Float64}

@@ -144,7 +144,7 @@ function compute_correlation_matrix(
 
     for dest_symbol in symbols
       if symbol == dest_symbol
-        corr_mat[symbol, symbol] = 1.0
+        corr_mat[symbol, dest_symbol] = 1.0
       else
         corr_mat[symbol, dest_symbol] = cor(returns[idx_slice, symbol], returns[idx_slice, dest_symbol])
       end

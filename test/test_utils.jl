@@ -13,9 +13,9 @@ function load_testconfig()
   ]
 
   trades = [
-    Trade(Date("2023-01-02"), Buy, "AAPL", 3, 20.0, 1.00, USD, 1.00),
-    Trade(Date("2023-01-02"), Buy, "MSFT", 8, 4.00, 1.00, USD, 1.00),
-    Trade(Date("2023-01-30"), Buy, "AAPL", 1, 22.0, 1.00, USD, 1.00),
+    Trade(Date("2023-01-02"), Buy, "AAPL", 3.00, 20.0, 1.00, USD, 1.00),
+    Trade(Date("2023-01-02"), Buy, "MSFT", 8.00, 4.00, 1.00, USD, 1.00),
+    Trade(Date("2023-01-30"), Buy, "AAPL", 1.00, 22.0, 1.00, USD, 1.00),
   ]
 
   portfolios = Dict("test" => PortfolioInfo(; name="test", currency=USD, transfers=transfers, trades=trades))

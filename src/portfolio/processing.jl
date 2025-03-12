@@ -89,8 +89,8 @@ function get_portfolio_trade_info(port::PortfolioInfo, exchange_rates::Dict{Tupl
   dates     = vcat(map(x -> x.date, trades), map(x -> x.date, transfers)) |> unique |> sort
   dates_raw = map(d -> Dates.format(d, "yyyy-mm-dd"), dates)
 
-  shares_bought_mat       = allocate_matrix(Int64, dates_raw, symbols) # net shares
-  shares_sold_mat         = allocate_matrix(Int64, dates_raw, symbols) # net shares
+  shares_bought_mat       = allocate_matrix(Float64, dates_raw, symbols) # net shares
+  shares_sold_mat         = allocate_matrix(Float64, dates_raw, symbols) # net shares
   shares_bought_price_mat = allocate_matrix(Float64, dates_raw, symbols) # aquisition cost?
   shares_sold_price_mat   = allocate_matrix(Float64, dates_raw, symbols)
   commissions_mat         = allocate_matrix(Float64, dates_raw, symbols)
@@ -162,9 +162,9 @@ function get_portfolio_trade_info(port::PortfolioInfo, exchange_rates::Dict{Tupl
     avg_price_mat[i:n, j] .= ffill(avg_price_mat[i:n, j].array)
   end
 
-  shares_bought_mat       = map(Int, ffill(shares_bought_mat))
+  shares_bought_mat       = map(Float64, ffill(shares_bought_mat))
   shares_bought_price_mat = map(Float64, ffill(shares_bought_price_mat))
-  shares_sold_mat         = map(Int, ffill(shares_sold_mat))
+  shares_sold_mat         = map(Float64, ffill(shares_sold_mat))
   shares_sold_price_mat   = map(Float64, ffill(shares_sold_price_mat))
   transfers_mat           = map(Float64, ffill(transfers_mat))
 
@@ -187,6 +187,7 @@ function get_portfolio_dataset(cfg::Config, port::PortfolioInfo)::PortfolioDatas
 
   dates_trade = map(x -> x.date, trades)
   date_min = minimum(dates_trade)
+  @info("Loading prices for portfolio $(port.name) from $(date_min)")
   close = load_prices(cfg, symbols; from=date_min) |> ffill
   raw_dates, _ = names(close)
 

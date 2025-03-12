@@ -1,6 +1,5 @@
 module Portfolio
 
-using Comonicon
 using Dates
 using PrettyTables
 using UnicodePlots
@@ -11,15 +10,15 @@ using StonksTerminal: collect_user_input, parse_string
 include("portfolio/processing.jl")
 include("portfolio/charts.jl")
 
-@cast deposit(; name::Union{String, Nothing}=nothing) = transfer_funds(; type=Deposit, name=name)
+deposit(; name::Union{String, Nothing}=nothing) = transfer_funds(; type=Deposit, name=name)
 
-@cast withdraw(; name::Union{String, Nothing}=nothing) = transfer_funds(; type=Withdrawal, name=name)
+withdraw(; name::Union{String, Nothing}=nothing) = transfer_funds(; type=Withdrawal, name=name)
 
-@cast buy(; name::Union{String, Nothing}=nothing) = add_trade(Buy, name)
+buy(; name::Union{String, Nothing}=nothing) = add_trade(Buy, name)
 
-@cast sell(; name::Union{String, Nothing}=nothing) = add_trade(Sell, name)
+sell(; name::Union{String, Nothing}=nothing) = add_trade(Sell, name)
 
-@cast function status(;
+function status(;
   name::Union{String, Nothing}=nothing,
   from::Union{Date, Nothing}=nothing,
   to::Union{Date, Nothing}=nothing,
@@ -55,7 +54,7 @@ function add_trade(type::TradeType, name::Union{String, Nothing}=nothing)
 
   date = collect_user_input("Enter date in format 'yyyy-mm-dd': ", Date)
   symbol = collect_user_input("Symbol (ticker): ", String)
-  shares = collect_user_input("Number of shares: ", Int64)
+  shares = collect_user_input("Number of shares: ", Float64)
   share_price = collect_user_input("Share price: ", Float64)
   commission = collect_user_input("Commission: ", Float64)
   currency = collect_user_input("Currency.", Currency)

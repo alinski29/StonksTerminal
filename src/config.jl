@@ -1,4 +1,3 @@
-using Comonicon
 using JSON3
 using StonksTerminal.Types
 using StonksTerminal: collect_user_input
@@ -18,7 +17,7 @@ APP_DIR = (
 DATA_DIR = joinpath(APP_DIR, "data")
 CFG_PATH = joinpath(APP_DIR, "config.json")
 
-@cast function config()
+function config()
   !isdir(APP_DIR) && mkpath(APP_DIR)
   if !isfile(CFG_PATH)
     return config_init()

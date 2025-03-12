@@ -1,7 +1,6 @@
 module Store
 
 using Arrow
-using Comonicon
 using Dates
 using Stonks
 using Tables
@@ -11,7 +10,7 @@ using Stonks.Stores: init, apply_schema
 using StonksTerminal: Config, config_read
 using StonksTerminal.Types
 
-@cast function update(; financials::Bool=false, info::Bool=false)
+function update(; financials::Bool=false, info::Bool=false)
   config = config_read()
   client = build_client()
   stores = load_stores(config.data.dir, config.data.format)

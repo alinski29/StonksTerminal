@@ -1,9 +1,8 @@
 module Watchlist
 
-using Comonicon
 using StonksTerminal: parse_list, config_read, config_write
 
-@cast function items(items::String)
+function add(items::String)
   cfg = config_read()
   symbols = parse_list(items)
 
@@ -15,7 +14,7 @@ using StonksTerminal: parse_list, config_read, config_write
   config_write(cfg)
 end
 
-@cast function remove(items::String)
+function remove(items::String)
   cfg = config_read()
   symbols = parse_list(items)
 

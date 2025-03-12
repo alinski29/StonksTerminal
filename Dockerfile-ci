@@ -1,0 +1,13 @@
+FROM debian:bookworm
+
+WORKDIR /app
+
+RUN echo "deb http://ftp.debian.org/debian sid main" >> /etc/apt/sources.list
+RUN apt-get update && apt-get install -y libc6
+
+ADD target/stonks .
+
+ENV PATH=/app/bin:${PATH}
+
+CMD ["/bin/bash", "-c"]
+ENTRYPOINT [""]

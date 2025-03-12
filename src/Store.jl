@@ -31,7 +31,7 @@ function load_stores(path::String, format::FileFormat)
       path="$path/price",
       ids=[:symbol],
       partitions=[:symbol],
-      format="arrow",
+      format=string(format),
       time_column="date",
       reader=reader,
       writer=writer,
@@ -40,7 +40,7 @@ function load_stores(path::String, format::FileFormat)
       path="$path/forex",
       ids=[:base, :target],
       # partitions=[:target],
-      format="arrow",
+      format=string(format),
       time_column="date",
       reader=reader,
       writer=writer,
@@ -48,28 +48,28 @@ function load_stores(path::String, format::FileFormat)
     :balance_sheet => FileStore{BalanceSheet}(;
       path="$path/balance_sheet",
       ids=[:symbol],
-      format="arrow",
+      format=string(format),
       reader=reader,
       writer=writer,
     ),
     :income_statement => FileStore{IncomeStatement}(;
       path="$path/income_statement",
       ids=[:symbol],
-      format="arrow",
+      format=string(format),
       reader=reader,
       writer=writer,
     ),
     :cashflow_statement => FileStore{CashflowStatement}(;
       path="$path/cashflow_statement",
       ids=[:symbol],
-      format="arrow",
+      format=string(format),
       reader=reader,
       writer=writer,
     ),
     :earnings => FileStore{Earnings}(;
       path="$path/earnings",
       ids=[:symbol],
-      format="arrow",
+      format=string(format),
       reader=reader,
       writer=writer,
     ),
@@ -78,7 +78,7 @@ end
 
 function get_writer(format::FileFormat)::Function
   writers = Dict(
-    csv => Stonks.Stores.reader_csv,
+    csv => Stonks.Stores.writer_csv,
     arrow => function writer(data::Vector{T}, path::String) where {T <: AbstractStonksRecord}
       Arrow.write(path, Stonks.to_table(unique(data)))
     end,
@@ -88,7 +88,7 @@ end
 
 function get_reader(format::FileFormat)::Function
   readers = Dict(
-    csv => Stonks.Stores.writer_csv,
+    csv => Stonks.Stores.reader_csv,
     arrow => function reader(path::String, ::Type{T}) where {T <: AbstractStonksRecord}
       apply_schema(collect(Tables.rows(Arrow.Table(path))), T)
     end,

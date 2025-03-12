@@ -19,4 +19,11 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [compat]
 ArgParse = "1.2.0"
+CSV = "0.5, 0.10"
 KahanSummation = "0.3.1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

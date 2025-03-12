@@ -12,7 +12,7 @@ function load_prices(
   from::Union{Date, Nothing}=nothing,
   to::Union{Date, Nothing}=nothing,
 )::NamedMatrix{Union{Float64, Missing}}
-  stores = Store.load_stores(cfg.data.dir, arrow)
+  stores = Store.load_stores(cfg.data.dir, cfg.data.format)
   dt_from = isnothing(from) ? Date("1970-01-01") : from
   dt_to = isnothing(to) ? Dates.today() : to
 
@@ -37,8 +37,8 @@ function load_prices(
   return mat
 end
 
-function load_forex(target_currency::String)::Dict{Tuple{Date, String}, Float64}
-  stores = Store.load_stores(config_read().data.dir, arrow)
+function load_forex(cfg::Config, target_currency::String)::Dict{Tuple{Date, String}, Float64}
+  stores = Store.load_stores(cfg.data.dir, cfg.data.format)
   # TODO: Use predicate pushdown after fixing the bug when saving currencies
   # Stonks.load(stores[:forex], Dict("target" => [target_currency])) |>
   Stonks.load(stores[:forex]) |>

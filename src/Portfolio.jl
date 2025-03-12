@@ -18,13 +18,13 @@ buy(; name::Union{String, Nothing}=nothing) = add_trade(Buy, name)
 
 sell(; name::Union{String, Nothing}=nothing) = add_trade(Sell, name)
 
-function status(;
+function status(config::Union{Config, Nothing}=nothing,;
   name::Union{String, Nothing}=nothing,
   from::Union{Date, Nothing}=nothing,
   to::Union{Date, Nothing}=nothing,
   days_delta::Int=360,
 )
-  cfg = config_read()
+  cfg = isnothing(config) ? config_read() : config
   port = get_portfolio(cfg, name)
   ds = get_portfolio_dataset(cfg, port)
 

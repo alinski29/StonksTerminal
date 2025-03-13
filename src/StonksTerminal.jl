@@ -121,26 +121,22 @@ function julia_main()::Cint
     elseif subcommand == "status"
       Portfolio.status(; kwargs...)
     else
-      println("Don't know how to handle subcommand: $subcommand")
+      @error("Don't know how to handle subcommand: $subcommand")
     end
   elseif command == "watchlist"
-    println("kwargs: $(args[command])")
+    # TODO This can be Nothing, handle the case
     kwargs = Dict((k, v) for (k, v) in args[command] if String(k) != String(v))
     subcommand = first(kwargs)[1]
-    println("subcommand: $subcommand, subargs: $(kwargs)")
-    # println("kwargs: $kwargs, subargs: $(args[command])")
     if subcommand == "add"
       Watchlist.add(subcommand)
     elseif subcommand == "remove"
       Watchlist.remove(kwargs[subcommand])
     end
   else
-    println("Don't know how to handle command: $command")
+    @error("Don't know how to handle command: $command")
   end
 
   return 0
 end
-
-# julia_main()
 
 end

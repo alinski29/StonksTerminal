@@ -79,12 +79,7 @@ using StonksTerminal: format_number, parse_pretty_number, allocate_matrix, expan
   @testset "fill_missing" begin
     mat = allocate_matrix(Union{Int, Missing}, ["r1", "r2", "r3"], ["c1", "c2"]) |> 
       xs -> fill_missing(xs, 42)
-    print(mat)
     @test all(x -> x == 42, mat)
   end
-
-  # @testset "map_date_to_indices" begin 
-
-  # end
 
 end

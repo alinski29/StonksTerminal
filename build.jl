@@ -2,22 +2,22 @@ using Pkg
 using UUIDs
 
 suffix = first(split(string(UUIDs.uuid4()), "-"))
-project_dir = pwd()
-build_dir = joinpath(pwd(), "build_$suffix")
-target_dir = joinpath(project_dir, "target/")
+PROJECT_DIR = pwd()
+BUILD_DIR = joinpath(pwd(), "build_$suffix")
+TARGET_DIR = joinpath(PROJECT_DIR, "target/")
 
-isdir(build_dir) && rm(build_dir; recursive=true)
-mkdir(build_dir)
+isdir(BUILD_DIR) && rm(BUILD_DIR; recursive=true)
+mkdir(BUILD_DIR)
 
 foreach(["Manifest.toml", "Project.toml"]) do file
-  cp(joinpath(project_dir, file), joinpath(build_dir, file))
+  cp(joinpath(PROJECT_DIR, file), joinpath(BUILD_DIR, file))
 end
 
 foreach(["src", "test"]) do dir
-  Base.cptree(joinpath(project_dir, dir), joinpath(build_dir, dir))
+  Base.cptree(joinpath(PROJECT_DIR, dir), joinpath(BUILD_DIR, dir))
 end
 
-cd(build_dir)
+cd(BUILD_DIR)
 
 Pkg.activate(".")
 Pkg.instantiate()
@@ -25,11 +25,11 @@ Pkg.add("PackageCompiler")
 
 using PackageCompiler
 
-isdir(target_dir) && rm(target_dir; recursive=true)
+isdir(TARGET_DIR) && rm(TARGET_DIR; recursive=true)
 
 create_app(
   ".",
-  target_dir,
+  TARGET_DIR,
   incremental=false,
   force=true,
   executables= ["stonks" => "julia_main"],
@@ -37,5 +37,5 @@ create_app(
   sysimage_build_args=`-O3 --strip-metadata`
 )
 
-cd(project_dir)
-rm(build_dir; recursive=true)
+cd(PROJECT_DIR)
+rm(BUILD_DIR; recursive=true)

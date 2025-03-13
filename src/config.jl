@@ -4,22 +4,24 @@ using StonksTerminal: collect_user_input
 
 export Config, config_read, config_write
 
-DIR_NAME = "stonks-terminal"
-APP_DIR = (
-  if !ismissing(get(ENV, "XDG_DATA_HOME", missing))
-    joinpath(ENV["XDG_DATA_HOME"], DIR_NAME)
-  elseif isdir(joinpath(homedir(), ".local/share"))
-    joinpath(homedir(), ".local/share", DIR_NAME)
-  else
-    joinpath(homedir(), ".$(DIR_NAME)")
-  end
-)
-DATA_DIR = joinpath(APP_DIR, "data")
-CFG_PATH = joinpath(APP_DIR, "config.json")
+APP_NAME = "stonks"
+
+function get_app_path()::String
+  return joinpath(get(ENV, "XDG_DATA_HOME", joinpath(homedir(), ".local/share")), APP_NAME)
+end
+
+function get_config_path()::String
+  return get(ENV, "STONKS_CONFIG_PATH", joinpath(get_app_path(), "config.json"))
+end
+
+function get_data_path()::String
+  return get(ENV, "STONKS_DATA_PATH", joinpath(get_app_path(), "data"))
+end
 
 function config()
-  !isdir(APP_DIR) && mkpath(APP_DIR)
-  if !isfile(CFG_PATH)
+  config_path = get_config_path()
+  !isdir(dirname(config_path)) && mkpath(dirname(config_path))
+  if !isfile(config_path)
     return config_init()
   end
   @info("Configuration file already exists. Override? y/n;")
@@ -29,7 +31,7 @@ function config()
 end
 
 @kwdef mutable struct StoreConfig
-  dir::String
+  dir::Union{String, Nothing} = nothing
   format::FileFormat
 end
 
@@ -40,12 +42,19 @@ end
   currencies::Set{Currency}
 end
 
-function config_read(path::String=CFG_PATH)::Config
-  JSON3.read(read(path, String), Config)
+function config_read(path::Union{String, Nothing}=nothing)::Config
+  cfg_path = isnothing(path) ? get_config_path() : path
+  cfg = JSON3.read(read(cfg_path, String), Config)
+  if isnothing(cfg.data.dir)
+    cfg.data.dir = get_data_path()
+  end
+
+  return cfg
 end
 
-function config_write(cfg::Config, path::String=CFG_PATH)
-  open(path, "w") do io
+function config_write(cfg::Config, path::Union{String, Nothing}=nothing)
+  cfg_path = isnothing(path) ? get_config_path() : path
+  open(cfg_path, "w") do io
     JSON3.pretty(io, cfg)
   end
 end
@@ -74,12 +83,12 @@ function config_init()
   )
 
   cfg = Config(;
-    data=StoreConfig(; dir=DATA_DIR, format=arrow),
+    data=StoreConfig(; dir=get_data_path(), format=arrow),
     watchlist=wl,
     portfolios=portfolios,
     currencies=currencies,
   )
 
   config_write(cfg)
-  @info("Configuration succesfully written to $(CFG_PATH) \n")
+  @info("Configuration succesfully written to $(get_config_path()) \n")
 end

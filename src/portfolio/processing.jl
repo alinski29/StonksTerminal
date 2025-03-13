@@ -3,7 +3,7 @@ using NamedArrays
 using Stonks
 using Stonks: load, AssetPrice, AssetInfo
 
-using StonksTerminal: Config, config_read, config_write
+using StonksTerminal: Config, StoreConfig, config_read, config_write
 using StonksTerminal: allocate_matrix, expand_matrix, ffill, fill_missing
 using StonksTerminal: load_prices, load_forex, get_latest_exchange_rate, compute_return, map_dates_to_indices
 using StonksTerminal.Store
@@ -64,11 +64,11 @@ function get_weights(
   return market_value ./ port_daily_value |> mat -> map(x -> isnan(x) || isinf(x) ? 0.0 : x, mat)
 end
 
-function get_portfolio_members(port::PortfolioInfo)::Dict{String, PortfolioMember}
-  cfg = config_read()
+function get_portfolio_members(port::PortfolioInfo, store_cfg::StoreConfig)::Dict{String, PortfolioMember}
+  # cfg = config_read()
   trades = port.trades |> trs -> sort(trs; by=x -> x.symbol)
   symbols = unique(map(x -> x.symbol, trades))
-  stores = Store.load_stores(cfg.data.dir, arrow)
+  stores = Store.load_stores(store_cfg.dir, store_cfg.format)
   infos = Dict([(x.symbol, x) for x in Stonks.load(stores[:info])])
   return Dict([
     smb => PortfolioMember(get(infos, smb, missing), [t for t in trades if t.symbol == smb]) for
@@ -183,7 +183,7 @@ function get_portfolio_dataset(cfg::Config, port::PortfolioInfo)::PortfolioDatas
   trades = port.trades |> trs -> sort(trs; by=x -> x.symbol)
   symbols = unique(map(x -> x.symbol, trades))
   target_currency = uppercase(string(port.currency))
-  members = get_portfolio_members(port)
+  members = get_portfolio_members(port, cfg.data)
 
   dates_trade = map(x -> x.date, trades)
   date_min = minimum(dates_trade)
@@ -191,7 +191,7 @@ function get_portfolio_dataset(cfg::Config, port::PortfolioInfo)::PortfolioDatas
   close = load_prices(cfg, symbols; from=date_min) |> ffill
   raw_dates, _ = names(close)
 
-  forex = load_forex(target_currency)
+  forex = load_forex(cfg, target_currency)
   trade_info = get_portfolio_trade_info(port, forex)
   # Currency conversions
   for symbol in symbols

@@ -49,7 +49,9 @@ jobs:
       - name: Build and package app tarball
         run: |
           julia build.jl -t auto -O3 --startup-file=no --heap-size-hint=6G
-          tar -czvf stonks_{{ matrix.arch }}.tar.gz -C target .
+          mv target stonks
+          tar -czf stonks_{{ matrix.arch }}.tar.gz stonks > errors.txt
+          cat ./errors.txt 
 
       - name: Upload app tarball
         uses: actions/upload-artifact@v4

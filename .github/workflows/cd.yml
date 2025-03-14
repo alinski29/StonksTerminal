@@ -6,10 +6,10 @@ on:
 
 jobs:
   build-and-release:
-    name: Release ${{ matrix.os }} - ${{ matrix.arch }}
+    name: Releasee ${{ matrix.arch }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
+        # os: [ubuntu-latest, ubuntu-24.04-arm]
         version: ["lts"]
         arch:
           - x64

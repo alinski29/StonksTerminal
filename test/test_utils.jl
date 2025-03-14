@@ -3,7 +3,7 @@ using Test
 
 using StonksTerminal.Types
 using StonksTerminal: Config, StoreConfig
-using StonksTerminal: enum_from_stringa
+using StonksTerminal: enum_from_string
 
 using Stonks:
   UpdatableSymbol,

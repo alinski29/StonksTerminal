@@ -50,7 +50,7 @@ jobs:
         run: |
           julia build.jl -t auto -O3 --startup-file=no --heap-size-hint=6G
           mv target stonks
-          tar -czf stonks_{{ matrix.arch }}.tar.gz stonks > errors.txt
+          tar -czf stonks_${{ matrix.arch }}.tar.gz stonks > errors.txt
           cat ./errors.txt 
 
       - name: Upload app tarball

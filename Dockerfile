@@ -23,4 +23,5 @@ RUN apt-get update && apt-get install -y libc6
 
 ENV PATH=/app/bin:${PATH}
 
-CMD ["/bin/bash"]
+CMD ["/bin/bash", "-c"]
+ENTRYPOINT ["stonks --help"]

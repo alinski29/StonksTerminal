@@ -15,8 +15,14 @@ PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Stonks = "165769d7-5ed9-41fd-9f18-b88cfb146d0e"
 Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [compat]
 ArgParse = "1.2.0"
+CSV = "0.5, 0.10"
 KahanSummation = "0.3.1"
+Test = "1.11.0"
+
+[targets]
+test = ["Test"]

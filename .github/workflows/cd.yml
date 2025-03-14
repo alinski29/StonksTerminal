@@ -9,17 +9,19 @@ jobs:
     name: Releasee ${{ matrix.arch }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
-        version: ["lts"]
+        # os: [ubuntu-latest, ubuntu-24.04-arm]
+        version: ["lts"] # julia version
         arch:
           - x64
           - arm64
           # - arm64-apple-darwin
         include:
-          - architecture: x64
+          - arch: x64
             runner: ubuntu-latest
-          - architecture: arm64
+            # os: ubuntu-latest
+          - arch: arm64
             runner: ubuntu-24.04-arm
+            # os: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read

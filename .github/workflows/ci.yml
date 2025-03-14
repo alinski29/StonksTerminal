@@ -18,9 +18,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [1]
+        version: ["lts"]
         os: [ubuntu-latest]
-        arch: [x86_64-linux]
+        arch: [x64]
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

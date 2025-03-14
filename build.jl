@@ -9,7 +9,7 @@ TARGET_DIR = joinpath(PROJECT_DIR, "target/")
 isdir(BUILD_DIR) && rm(BUILD_DIR; recursive=true)
 mkdir(BUILD_DIR)
 
-foreach(["Manifest.toml", "Project.toml"]) do file
+foreach(["Project.toml"]) do file
   cp(joinpath(PROJECT_DIR, file), joinpath(BUILD_DIR, file))
 end
 

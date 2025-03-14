@@ -22,7 +22,6 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 ArgParse = "1.2.0"
 CSV = "0.5, 0.10"
 KahanSummation = "0.3.1"
-Test = "1.11.0"
 
 [targets]
 test = ["Test"]

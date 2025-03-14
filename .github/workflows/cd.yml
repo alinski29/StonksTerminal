@@ -13,7 +13,7 @@ jobs:
         version: ["lts"]
         arch:
           # - x64
-          - aarch64
+          - arm64
           # - arm64-apple-darwin
     runs-on: ${{ matrix.os }}
     permissions:
@@ -25,10 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Print system architecture
+        run: uname -m
+
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
+          # arch: ${{ matrix.arch }}
 
       - uses: actions/cache@v4
         env:

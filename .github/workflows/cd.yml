@@ -9,19 +9,15 @@ jobs:
     name: Releasee ${{ matrix.arch }}
     strategy:
       matrix:
-        # os: [ubuntu-latest, ubuntu-24.04-arm]
         version: ["lts"] # julia version
         arch:
           - x64
           - arm64
-          # - arm64-apple-darwin
         include:
           - arch: x64
             runner: ubuntu-latest
-            # os: ubuntu-latest
           - arch: arm64
             runner: ubuntu-24.04-arm
-            # os: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -38,7 +34,6 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-          # arch: ${{ matrix.arch }}
 
       - uses: actions/cache@v4
         env:
@@ -59,7 +54,7 @@ jobs:
       - name: Upload app tarball
         uses: actions/upload-artifact@v4
         with:
-          name: stonks_{{ matrix.arch }}.tar.gz
+          name: stonks_${{ matrix.arch }}.tar.gz
           path: stonks_${{ matrix.arch }}.tar.gz
 
       - name: Create GitHub Release

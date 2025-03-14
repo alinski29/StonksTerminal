@@ -15,7 +15,12 @@ jobs:
           # - x64
           - arm64
           # - arm64-apple-darwin
-    runs-on: ${{ matrix.os }}
+        include:
+          - architecture: x64
+            runner: ubuntu-latest
+          - architecture: arm64
+            runner: ubuntu-22.04-arm64
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
